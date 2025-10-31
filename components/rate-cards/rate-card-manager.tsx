@@ -67,14 +67,14 @@ export const RateCardManager = () => {
         id: rateCard.id,
         code: rateCard.code,
         name: rateCard.name,
-        unit: rateCard.unit,
+        unit: rateCard.unit as 'per_1k' | 'job' | 'enclose',
         notes: rateCard.notes ?? '',
         bands: rateCard.bands.map((band) => ({
           id: band.id,
           fromQty: band.fromQty,
           toQty: band.toQty,
-          pricePerThousand: band.pricePerThousand,
-          makeReadyFixed: band.makeReadyFixed
+          pricePerThousand: Number(band.pricePerThousand),
+          makeReadyFixed: Number(band.makeReadyFixed)
         }))
       });
     } else {
@@ -88,11 +88,12 @@ export const RateCardManager = () => {
     if (!draft) return;
 
     try {
+      const payload = { ...draft, notes: draft.notes ?? undefined };
       if (draft.id) {
-        await updateMutation.mutateAsync(draft as Required<DraftRateCard>);
+        await updateMutation.mutateAsync(payload as any);
         toast.success('Rate card updated.');
       } else {
-        await createMutation.mutateAsync(draft);
+        await createMutation.mutateAsync(payload);
         toast.success('Rate card created.');
       }
 
@@ -321,7 +322,7 @@ export const RateCardManager = () => {
             </TableHeader>
             <TableBody>
               {sortedRateCards.map((card) => (
-                <TableRow key={card.id} className="cursor-pointer" onClick={() => openEditor(card)}>
+                <TableRow key={card.id} className="cursor-pointer" onClick={() => openEditor(card as unknown as RateCard)}>
                   <TableCell className="font-medium">{card.code}</TableCell>
                   <TableCell>{card.name}</TableCell>
                   <TableCell>{card.unit}</TableCell>
@@ -332,7 +333,7 @@ export const RateCardManager = () => {
                       className="px-3 py-1 text-xs"
                       onClick={(event) => {
                         event.stopPropagation();
-                        openEditor(card);
+                        openEditor(card as unknown as RateCard);
                       }}
                     >
                       Manage

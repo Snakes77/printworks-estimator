@@ -53,7 +53,7 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
     history: quote.history.map((entry) => ({
       id: entry.id,
       action: entry.action,
-      payload: entry.payload,
+      payload: (entry.payload as Record<string, unknown>) || {},
       createdAt: entry.createdAt.toISOString()
     })),
     totals: {

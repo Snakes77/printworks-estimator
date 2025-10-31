@@ -94,7 +94,8 @@ async function main() {
   for (const rc of rateCards) {
     const created = await prisma.rateCard.findUnique({ where: { code: rc.code } });
     if (!created) continue;
-    for (const band of rc.bands!.create!) {
+    const bandsArray = Array.isArray(rc.bands?.create) ? rc.bands.create : [];
+    for (const band of bandsArray) {
       await prisma.band.create({
         data: {
           rateCardId: created.id,
