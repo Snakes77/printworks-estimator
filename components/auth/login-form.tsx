@@ -36,7 +36,7 @@ export const LoginForm = () => {
 
       if (usePassword && values.password) {
         // Try password sign in first
-        let { error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email: values.email,
           password: values.password
         });
