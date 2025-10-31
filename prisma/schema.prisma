@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SUPABASE_DB_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  quotes    Quote[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RateCard {
+  id         String      @id @default(cuid())
+  code       String      @unique
+  name       String
+  unit       String
+  notes      String?
+  bands      Band[]
+  quoteLines QuoteLine[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Band {
+  id               String   @id @default(cuid())
+  rateCardId       String
+  fromQty          Int
+  toQty            Int
+  pricePerThousand Decimal @db.Decimal(10, 2)
+  makeReadyFixed   Decimal @db.Decimal(10, 2)
+  RateCard         RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+}
+
+model Quote {
+  id           String    @id @default(cuid())
+  userId       String
+  clientName   String
+  projectName  String
+  reference    String
+  quantity     Int
+  envelopeType String
+  insertsCount Int
+  vatRate      Decimal   @db.Decimal(4, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lines        QuoteLine[]
+  pdfUrl       String?
+  user         User      @relation(fields: [userId], references: [id])
+  history      QuoteHistory[]
+}
+
+model QuoteLine {
+  id                   String   @id @default(cuid())
+  quoteId              String
+  rateCardId           String
+  description          String
+  unitPricePerThousand Decimal @db.Decimal(10, 2)
+  makeReadyFixed       Decimal @db.Decimal(10, 2)
+  unitsInThousands     Decimal @db.Decimal(12, 3)
+  lineTotalExVat       Decimal @db.Decimal(12, 2)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  quote                Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  rateCard             RateCard @relation(fields: [rateCardId], references: [id])
+}
+
+model QuoteHistory {
+  id        String   @id @default(cuid())
+  quoteId   String
+  action    String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+}
