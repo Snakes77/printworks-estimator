@@ -9,10 +9,22 @@ export const createTRPCContext = async () => {
     data: { user }
   } = await supabase.auth.getUser();
 
+  // TEMPORARY: Use demo user for development
+  const demoUser = user || {
+    id: 'demo-user-id',
+    email: 'dave@example.co.uk',
+    app_metadata: {},
+    user_metadata: { full_name: 'Demo User' },
+    aud: 'authenticated',
+    created_at: new Date().toISOString(),
+    role: 'authenticated',
+    updated_at: new Date().toISOString()
+  };
+
   return {
     supabase,
     prisma,
-    user
+    user: demoUser as any
   };
 };
 
