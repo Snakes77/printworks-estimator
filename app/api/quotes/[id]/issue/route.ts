@@ -22,11 +22,11 @@ const issueSchema = z.object({
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getAuthenticatedUser();
-    const { id } = await params;
+    const { id } = await props.params;
     const body = await request.json();
     const { to } = issueSchema.parse(body);
 

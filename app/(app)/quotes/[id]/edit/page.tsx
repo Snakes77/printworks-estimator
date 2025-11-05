@@ -5,7 +5,8 @@ import { calculateTotals } from '@/lib/pricing';
 import { QuoteBuilder } from '@/components/quotes/quote-builder';
 import { getAuthenticatedUser } from '@/lib/auth';
 
-export default async function EditQuotePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditQuotePage({ params }: { params?: Promise<{ id: string }> }) {
+  if (!params) throw new Error('No params provided');
   // SECURITY: Require authentication
   const user = await getAuthenticatedUser();
   const { id } = await params;

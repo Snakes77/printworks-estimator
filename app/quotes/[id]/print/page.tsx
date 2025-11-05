@@ -25,7 +25,8 @@ const formatDateTime = (date: Date): string => {
   }).format(date);
 };
 
-export default async function PrintPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PrintPage({ params }: { params?: Promise<{ id: string }> }) {
+  if (!params) throw new Error('No params provided');
   const { id } = await params;
   console.log('[Print Page] Fetching quote:', id);
 
