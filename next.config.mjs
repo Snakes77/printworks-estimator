@@ -7,7 +7,16 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: false
-  }
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'dmc-encore.co.uk',
+        pathname: '/wp-content/**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;

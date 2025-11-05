@@ -24,8 +24,7 @@ export const LoginForm = () => {
   const {
     register,
     handleSubmit,
-    formState: { errors },
-    watch
+    formState: { errors }
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
   const [loading, setLoading] = useState(false);
   const [usePassword, setUsePassword] = useState(false);
@@ -77,9 +76,10 @@ export const LoginForm = () => {
 
         toast.success('Magic link sent. Please check your inbox.');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error?.message || 'Unable to sign in. Please try again.');
+      const message = error instanceof Error ? error.message : 'Unable to sign in. Please try again.';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

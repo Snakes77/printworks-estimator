@@ -90,7 +90,14 @@ export const RateCardManager = () => {
     try {
       const payload = { ...draft, notes: draft.notes ?? undefined };
       if (draft.id) {
-        await updateMutation.mutateAsync(payload as any);
+        await updateMutation.mutateAsync({
+          id: draft.id,
+          code: draft.code,
+          name: draft.name,
+          unit: draft.unit,
+          notes: draft.notes ?? undefined,
+          bands: draft.bands
+        });
         toast.success('Rate card updated.');
       } else {
         await createMutation.mutateAsync(payload);

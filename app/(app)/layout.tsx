@@ -5,15 +5,15 @@ import { AppShell } from '@/components/layout/app-shell';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createSupabaseServerClient();
   const {
-    data: { session }
-  } = await supabase.auth.getSession();
+    data: { user }
+  } = await supabase.auth.getUser();
 
-  // TEMPORARY: Bypass auth for demo
-  // if (!session) {
-  //   redirect('/login');
-  // }
+  // SECURITY: Require authentication - NO bypass
+  if (!user) {
+    redirect('/login');
+  }
 
-  const profile = session?.user;
-
-  return <AppShell user={{ email: profile?.email ?? 'demo@example.com', name: profile?.user_metadata?.full_name ?? 'Demo User' }}>{children}</AppShell>;
+  // Note: PDF routes are now outside (app) route group at app/quotes/[id]/pdf
+  // They bypass AppShell automatically by not being in this layout
+  return <AppShell user={{ email: user.email ?? '', name: user.user_metadata?.full_name ?? null }}>{children}</AppShell>;
 }

@@ -77,20 +77,20 @@ export const calculateQuoteLines = (
   });
 };
 
-export const calculateTotals = (lines: QuoteLineCalculation[], vatRate: number) => {
+export const calculateTotals = (lines: QuoteLineCalculation[]) => {
   const subtotal = lines.reduce((acc, line) => acc.add(line.lineTotalExVat), new Decimal(0));
-  const vatFraction = new Decimal(vatRate).div(100);
-  const vat = subtotal.mul(vatFraction);
-  const total = subtotal.add(vat);
-
+  
+  // Quotes don't include VAT - subtotal equals total
   return {
     subtotal,
-    vat,
-    total
+    total: subtotal
   };
 };
 
-export const formatGBP = (value: Decimal | number) => {
+export const formatGBP = (value: Decimal | number | null | undefined) => {
+  if (value === null || value === undefined) {
+    return '£0.00';
+  }
   const decimalValue = Decimal.isDecimal(value) ? value : new Decimal(value);
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',

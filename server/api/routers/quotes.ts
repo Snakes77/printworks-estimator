@@ -5,6 +5,10 @@ import { createTRPCRouter, protectedProcedure } from '@/server/api/trpc';
 import { calculateLine, calculateQuoteLines, calculateTotals } from '@/lib/pricing';
 import { ensurePrismaUser } from '@/lib/app-user';
 import { generateQuotePdfBuffer } from '@/server/pdf/generator';
+import { verifyQuoteOwnership } from '@/lib/auth';
+import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { sendQuoteEmail } from '@/lib/email';
 
 const serialiseLine = (line: {
   id: string;
@@ -27,7 +31,6 @@ const serialiseLine = (line: {
 
 const serialiseTotals = (totals: ReturnType<typeof calculateTotals>) => ({
   subtotal: totals.subtotal.toNumber(),
-  vat: totals.vat.toNumber(),
   total: totals.total.toNumber()
 });
 
@@ -37,14 +40,13 @@ const lineSelectionSchema = z.object({
 });
 
 const quotePayloadSchema = z.object({
-  clientName: z.string().trim().min(2),
-  projectName: z.string().trim().min(1),
-  reference: z.string().trim().min(1),
-  quantity: z.number().int().positive(),
-  envelopeType: z.string().trim().min(1),
-  insertsCount: z.number().int().min(0),
-  vatRate: z.number().min(0),
-  lines: z.array(lineSelectionSchema).min(1)
+  clientName: z.string().trim().min(2).max(200),
+  projectName: z.string().trim().min(1).max(200),
+  reference: z.string().trim().min(1).max(100),
+  quantity: z.number().int().positive().max(1_000_000),
+  envelopeType: z.string().trim().min(1).max(50),
+  insertsCount: z.number().int().min(0).max(100),
+  lines: z.array(lineSelectionSchema).min(1).max(100)
 });
 
 export const quotesRouter = createTRPCRouter({
@@ -58,8 +60,9 @@ export const quotesRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const user = await ensurePrismaUser(ctx.user);
+      // SECURITY: Always scope queries to current user
       const where = {
-        userId: user.id,
+        userId: user.id, // CRITICAL: User can only see their own quotes
         ...(input?.search
           ? {
               OR: [
@@ -87,8 +90,7 @@ export const quotesRouter = createTRPCRouter({
             makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
             unitsInThousands: new Decimal(line.unitsInThousands.toString()),
             lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-          })),
-          Number(quote.vatRate)
+          }))
         );
 
         return {
@@ -99,7 +101,6 @@ export const quotesRouter = createTRPCRouter({
           quantity: quote.quantity,
           envelopeType: quote.envelopeType,
           insertsCount: quote.insertsCount,
-          vatRate: Number(quote.vatRate),
           pdfUrl: quote.pdfUrl,
           createdAt: quote.createdAt,
           updatedAt: quote.updatedAt,
@@ -108,6 +109,11 @@ export const quotesRouter = createTRPCRouter({
       });
     }),
   get: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const user = await ensurePrismaUser(ctx.user);
+    
+    // SECURITY: Verify ownership before returning quote
+    await verifyQuoteOwnership(input.id, user.id);
+
     const quote = await ctx.prisma.quote.findUnique({
       where: { id: input.id },
       include: {
@@ -133,8 +139,7 @@ export const quotesRouter = createTRPCRouter({
         makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
         unitsInThousands: new Decimal(line.unitsInThousands.toString()),
         lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-      })),
-      Number(quote.vatRate)
+      }))
     );
 
     return {
@@ -145,7 +150,6 @@ export const quotesRouter = createTRPCRouter({
       quantity: quote.quantity,
       envelopeType: quote.envelopeType,
       insertsCount: quote.insertsCount,
-      vatRate: Number(quote.vatRate),
       createdAt: quote.createdAt,
       updatedAt: quote.updatedAt,
       pdfUrl: quote.pdfUrl,
@@ -170,7 +174,7 @@ export const quotesRouter = createTRPCRouter({
     });
 
     const lines = calculateQuoteLines(input.quantity, input.insertsCount, orderedCards);
-    const totals = calculateTotals(lines, input.vatRate);
+    const totals = calculateTotals(lines);
 
     return {
       lines: lines.map((line) => ({
@@ -186,6 +190,9 @@ export const quotesRouter = createTRPCRouter({
   }),
   create: protectedProcedure.input(quotePayloadSchema).mutation(async ({ ctx, input }) => {
     const user = await ensurePrismaUser(ctx.user);
+    
+    // SECURITY: Rate limit quote creation
+    await checkRateLimit(user.id, RATE_LIMITS.QUOTE_CREATE);
 
     const rateCards = await ctx.prisma.rateCard.findMany({
       where: { id: { in: input.lines.map((line) => line.rateCardId) } },
@@ -210,7 +217,7 @@ export const quotesRouter = createTRPCRouter({
       return calculateLine(card, band, input.quantity, input.insertsCount);
     });
 
-    const totals = calculateTotals(lineCalculations, input.vatRate);
+    const totals = calculateTotals(lineCalculations);
 
     const quote = await ctx.prisma.quote.create({
       data: {
@@ -221,7 +228,7 @@ export const quotesRouter = createTRPCRouter({
         quantity: input.quantity,
         envelopeType: input.envelopeType,
         insertsCount: input.insertsCount,
-        vatRate: new Prisma.Decimal(input.vatRate),
+        vatRate: new Prisma.Decimal(0), // Quotes don't include VAT, set to 0 for backward compatibility
         lines: {
           create: lineCalculations.map((line) => ({
             rateCardId: line.rateCardId,
@@ -242,7 +249,6 @@ export const quotesRouter = createTRPCRouter({
               })),
               totals: {
                 subtotal: totals.subtotal.toString(),
-                vat: totals.vat.toString(),
                 total: totals.total.toString()
               }
             }
@@ -254,13 +260,17 @@ export const quotesRouter = createTRPCRouter({
 
     return {
       ...quote,
-      vatRate: Number(quote.vatRate),
       lines: quote.lines.map(serialiseLine)
     };
   }),
   update: protectedProcedure
     .input(quotePayloadSchema.extend({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const user = await ensurePrismaUser(ctx.user);
+      
+      // SECURITY: Verify ownership before allowing update
+      await verifyQuoteOwnership(input.id, user.id);
+
       const existing = await ctx.prisma.quote.findUnique({
         where: { id: input.id },
         include: { lines: true }
@@ -295,7 +305,7 @@ export const quotesRouter = createTRPCRouter({
         return calculateLine(card, band, input.quantity, input.insertsCount);
       });
 
-      const totals = calculateTotals(lineCalculations, input.vatRate);
+      const totals = calculateTotals(lineCalculations);
 
       const updated = await ctx.prisma.quote.update({
         where: { id: input.id },
@@ -306,7 +316,7 @@ export const quotesRouter = createTRPCRouter({
           quantity: input.quantity,
           envelopeType: input.envelopeType,
           insertsCount: input.insertsCount,
-          vatRate: new Prisma.Decimal(input.vatRate),
+          vatRate: new Prisma.Decimal(0), // Quotes don't include VAT, set to 0 for backward compatibility
           lines: {
             create: lineCalculations.map((line) => ({
               rateCardId: line.rateCardId,
@@ -327,7 +337,6 @@ export const quotesRouter = createTRPCRouter({
                 })),
                 totals: {
                   subtotal: totals.subtotal.toString(),
-                  vat: totals.vat.toString(),
                   total: totals.total.toString()
                 }
               }
@@ -339,46 +348,192 @@ export const quotesRouter = createTRPCRouter({
 
       return {
         ...updated,
-        vatRate: Number(updated.vatRate),
         lines: updated.lines.map(serialiseLine)
       };
     }),
   generatePdf: protectedProcedure
     .input(z.object({ quoteId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const { pdf, totals } = await generateQuotePdfBuffer(input.quoteId);
+      try {
+        const user = await ensurePrismaUser(ctx.user);
+        
+        // SECURITY: Rate limit PDF generation (expensive operation)
+        await checkRateLimit(user.id, RATE_LIMITS.PDF_GENERATION);
+        
+        // SECURITY: Verify ownership before generating PDF
+        await verifyQuoteOwnership(input.quoteId, user.id);
 
-      const storage = ctx.supabase.storage.from('quotes');
-      const filePath = `${input.quoteId}.pdf`;
-      const uploadResult = await storage.upload(filePath, pdf, {
-        contentType: 'application/pdf',
-        upsert: true
-      });
+        console.log('[tRPC] generatePdf: Starting PDF generation for quote:', input.quoteId);
+        const { pdf, totals } = await generateQuotePdfBuffer(input.quoteId, user.id, ctx.cookies);
+        console.log('[tRPC] generatePdf: PDF generated successfully, size:', pdf.length, 'bytes');
 
-      if (uploadResult.error) {
-        throw uploadResult.error;
-      }
+        // SECURITY: Use service role client for storage operations
+        const serviceClient = createSupabaseServiceRoleClient();
+        const storage = serviceClient.storage.from('quotes');
+        const filePath = `${input.quoteId}.pdf`;
+        console.log('[tRPC] generatePdf: Uploading PDF to storage...');
+        const uploadResult = await storage.upload(filePath, pdf, {
+          contentType: 'application/pdf',
+          upsert: true
+        });
 
-      const {
-        data: { publicUrl }
-      } = storage.getPublicUrl(filePath);
+        if (uploadResult.error) {
+          console.error('[tRPC] generatePdf: Storage upload error:', uploadResult.error);
+          throw uploadResult.error;
+        }
 
-      await ctx.prisma.quote.update({
-        where: { id: input.quoteId },
-        data: {
-          pdfUrl: publicUrl,
-          history: {
-            create: {
-              action: 'PDF_GENERATED',
-              payload: {
-                pdfUrl: publicUrl,
-                totals
+        console.log('[tRPC] generatePdf: PDF uploaded successfully, generating signed URL...');
+        // SECURITY: Generate signed URL instead of public URL (5 minute expiry)
+        const {
+          data: signedUrlData
+        } = await storage.createSignedUrl(filePath, 300); // 5 minutes
+
+        if (!signedUrlData?.signedUrl) {
+          throw new Error('Failed to generate signed URL');
+        }
+
+        const signedUrl = signedUrlData.signedUrl;
+        console.log('[tRPC] generatePdf: Signed URL generated successfully');
+
+        await ctx.prisma.quote.update({
+          where: { id: input.quoteId },
+          data: {
+            pdfUrl: signedUrl,
+            history: {
+              create: {
+                action: 'PDF_GENERATED',
+                payload: {
+                  pdfUrl: signedUrl,
+                  totals
+                }
               }
             }
           }
-        }
-      });
+        });
 
-      return { pdfUrl: publicUrl, totals };
+        console.log('[tRPC] generatePdf: Quote updated with PDF URL');
+        return { pdfUrl: signedUrl, totals };
+      } catch (error) {
+        console.error('[tRPC] generatePdf: Error occurred:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        console.error('[tRPC] generatePdf: Error details:', {
+          message: errorMessage,
+          stack: errorStack,
+          quoteId: input.quoteId,
+          userId: ctx.user?.id
+        });
+        
+        // Re-throw with more context
+        throw new Error(`PDF generation failed: ${errorMessage}`);
+      }
+    }),
+  sendEmail: protectedProcedure
+    .input(z.object({ 
+      quoteId: z.string(),
+      to: z.string().email('Invalid email address')
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const user = await ensurePrismaUser(ctx.user);
+        
+        // SECURITY: Verify ownership before sending email
+        await verifyQuoteOwnership(input.quoteId, user.id);
+
+        // Get quote details
+        const quote = await ctx.prisma.quote.findUnique({
+          where: { id: input.quoteId },
+          include: {
+            lines: { orderBy: { createdAt: 'asc' } }
+          }
+        });
+
+        if (!quote) {
+          throw new Error('Quote not found');
+        }
+
+        // Generate PDF if not already generated or URL expired
+        let pdfBuffer: Buffer;
+        let pdfUrl: string;
+
+        if (quote.pdfUrl) {
+          // Try to use existing PDF URL (may be expired)
+          pdfUrl = quote.pdfUrl;
+          // Still generate PDF buffer for attachment
+          console.log('[tRPC] sendEmail: Generating PDF buffer for attachment...');
+          const { pdf } = await generateQuotePdfBuffer(input.quoteId, user.id, ctx.cookies);
+          pdfBuffer = Buffer.from(pdf);
+        } else {
+          // Generate PDF and upload
+          console.log('[tRPC] sendEmail: Generating PDF...');
+          const { pdf, totals } = await generateQuotePdfBuffer(input.quoteId, user.id, ctx.cookies);
+          pdfBuffer = Buffer.from(pdf);
+
+          // Upload to storage
+          const serviceClient = createSupabaseServiceRoleClient();
+          const storage = serviceClient.storage.from('quotes');
+          const filePath = `${input.quoteId}.pdf`;
+          
+          const uploadResult = await storage.upload(filePath, pdf, {
+            contentType: 'application/pdf',
+            upsert: true
+          });
+
+          if (uploadResult.error) {
+            throw uploadResult.error;
+          }
+
+          // Generate signed URL (24 hours for email)
+          const { data: signedUrlData } = await storage.createSignedUrl(filePath, 86400); // 24 hours
+          if (!signedUrlData?.signedUrl) {
+            throw new Error('Failed to generate signed URL');
+          }
+          pdfUrl = signedUrlData.signedUrl;
+
+          // Update quote with PDF URL
+          await ctx.prisma.quote.update({
+            where: { id: input.quoteId },
+            data: { pdfUrl }
+          });
+        }
+
+        // Send email
+        console.log('[tRPC] sendEmail: Sending email to:', input.to);
+        const emailId = await sendQuoteEmail({
+          to: input.to,
+          quoteReference: quote.reference,
+          clientName: quote.clientName,
+          pdfUrl,
+          pdfBuffer
+        });
+
+        if (!emailId) {
+          throw new Error('Email service not configured. Please set RESEND_API_KEY.');
+        }
+
+        // Record email send in history
+        await ctx.prisma.quote.update({
+          where: { id: input.quoteId },
+          data: {
+            history: {
+              create: {
+                action: 'EMAIL_SENT',
+                payload: {
+                  to: input.to,
+                  emailId,
+                  pdfUrl
+                }
+              }
+            }
+          }
+        });
+
+        console.log('[tRPC] sendEmail: Email sent successfully, ID:', emailId);
+        return { emailId, sent: true };
+      } catch (error) {
+        console.error('[tRPC] sendEmail: Error occurred:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to send email: ${errorMessage}`);
+      }
     })
 });

@@ -12,10 +12,23 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: '#1F4E79',
-          muted: '#274C77'
+          DEFAULT: '#274472',      // DMC Encore primary blue
+          muted: '#1e3a5a',         // Darker shade
+          light: '#3a5a7a',         // Lighter shade
+          accent: '#81599f',        // DMC Encore purple/violet
+          secondary: '#7EBEC5',    // DMC Encore teal accent
         }
-      }
+      },
+      fontFamily: {
+        sans: [
+          "'Futura PT'",
+          'Helvetica',
+          'Arial',
+          'system-ui',
+          '-apple-system',
+          'sans-serif'
+        ],
+      },
     }
   },
   plugins: [require('tailwindcss-animate')]

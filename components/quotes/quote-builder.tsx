@@ -22,8 +22,7 @@ const quoteSchema = z.object({
   reference: z.string().min(1, 'Reference is required'),
   quantity: z.coerce.number().int().positive('Quantity must be a whole number'),
   envelopeType: z.string().min(1),
-  insertsCount: z.coerce.number().int().min(0),
-  vatRate: z.coerce.number()
+  insertsCount: z.coerce.number().int().min(0)
 });
 
 type QuoteFormValues = z.infer<typeof quoteSchema>;
@@ -60,21 +59,14 @@ type ExistingQuote = {
   quantity: number;
   envelopeType: string;
   insertsCount: number;
-  vatRate: number;
   lines: PreviewLine[];
   totals: {
     subtotal: number;
-    vat: number;
     total: number;
   };
 };
 
 type LineRow = PreviewLine & { code: string };
-
-const vatOptions = [
-  { label: 'Standard VAT (20%)', value: 20 },
-  { label: 'Zero rated (0%)', value: 0 }
-];
 
 const envelopeOptions = ['C5', 'C4', 'DL'];
 
@@ -103,8 +95,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           reference: existingQuote.reference,
           quantity: existingQuote.quantity,
           envelopeType: existingQuote.envelopeType,
-          insertsCount: existingQuote.insertsCount,
-          vatRate: existingQuote.vatRate
+          insertsCount: existingQuote.insertsCount
         }
       : {
           clientName: '',
@@ -112,14 +103,12 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           reference: '',
           quantity: 20000,
           envelopeType: 'C5',
-          insertsCount: 1,
-          vatRate: 20
+          insertsCount: 1
         }
   });
 
   const quantity = form.watch('quantity');
   const insertsCount = form.watch('insertsCount');
-  const vatRate = form.watch('vatRate');
 
   useEffect(() => {
     if (!selectedRateCardIds.length) {
@@ -132,7 +121,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       lines: selectedRateCardIds.map((id) => ({ rateCardId: id }))
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRateCardIds, quantity, insertsCount, vatRate]);
+  }, [selectedRateCardIds, quantity, insertsCount]);
 
   const availableCards = useMemo(
     () => rateCards.filter((card) => !selectedRateCardIds.includes(card.id)),
@@ -174,7 +163,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
     });
   }, [selectedCards, preview.data, existingQuote]);
 
-  const totals = preview.data?.totals ?? existingQuote?.totals ?? { subtotal: 0, vat: 0, total: 0 };
+  const totals = preview.data?.totals ?? existingQuote?.totals ?? { subtotal: 0, total: 0 };
   const isEditing = Boolean(existingQuote);
 
   const columns = useMemo<ColumnDef<LineRow>[]>(
@@ -311,25 +300,9 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
                 </Select>
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="insertsCount">Inserts</Label>
-                <Input id="insertsCount" type="number" min={0} {...form.register('insertsCount', { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="vatRate">VAT rate</Label>
-                <Select
-                  id="vatRate"
-                  value={form.watch('vatRate').toString()}
-                  onChange={(event) => form.setValue('vatRate', Number(event.target.value))}
-                >
-                  {vatOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="insertsCount">Inserts</Label>
+              <Input id="insertsCount" type="number" min={0} {...form.register('insertsCount', { valueAsNumber: true })} />
             </div>
           </CardContent>
         </Card>
@@ -397,16 +370,8 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
             <CardTitle>Totals</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Subtotal (ex VAT)</span>
-              <span className="font-medium">{formatGBP(totals.subtotal ?? 0)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">VAT ({vatRate.toFixed(1)}%)</span>
-              <span className="font-medium">{formatGBP(totals.vat ?? 0)}</span>
-            </div>
             <div className="flex items-center justify-between text-base font-semibold text-slate-900">
-              <span>Total (inc VAT)</span>
+              <span>Total</span>
               <span>{formatGBP(totals.total ?? 0)}</span>
             </div>
           </CardContent>

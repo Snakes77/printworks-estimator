@@ -218,11 +218,11 @@ describe('Pricing Engine', () => {
         }
       ];
 
-      const totals = calculateTotals(lines, 20);
+      const totals = calculateTotals(lines);
 
+      // Quotes are now net-only (no VAT calculated)
       expect(totals.subtotal.toNumber()).toBe(750);
-      expect(totals.vat.toNumber()).toBe(150);
-      expect(totals.total.toNumber()).toBe(900);
+      expect(totals.total.toNumber()).toBe(750);
     });
 
     it('calculates 0% VAT (zero-rated) correctly', () => {
@@ -237,18 +237,16 @@ describe('Pricing Engine', () => {
         }
       ];
 
-      const totals = calculateTotals(lines, 0);
+      const totals = calculateTotals(lines);
 
       expect(totals.subtotal.toNumber()).toBe(1030);
-      expect(totals.vat.toNumber()).toBe(0);
       expect(totals.total.toNumber()).toBe(1030);
     });
 
     it('handles empty line array', () => {
-      const totals = calculateTotals([], 20);
+      const totals = calculateTotals([]);
 
       expect(totals.subtotal.toNumber()).toBe(0);
-      expect(totals.vat.toNumber()).toBe(0);
       expect(totals.total.toNumber()).toBe(0);
     });
 
@@ -280,11 +278,10 @@ describe('Pricing Engine', () => {
         }
       ];
 
-      const totals = calculateTotals(lines, 20);
+      const totals = calculateTotals(lines);
 
       expect(totals.subtotal.toNumber()).toBe(3500);
-      expect(totals.vat.toNumber()).toBe(700);
-      expect(totals.total.toNumber()).toBe(4200);
+      expect(totals.total.toNumber()).toBe(3500);
     });
   });
 
@@ -369,22 +366,20 @@ describe('Pricing Engine', () => {
       const encLine = calculateLine(enclosing, enclosing.bands[0] as any, 20000, 3);
 
       const lines = [lithoLine, foldLine, encLine];
-      const totals = calculateTotals(lines, 20);
+      const totals = calculateTotals(lines);
 
       // Expected:
       // Litho: 20 units × £50 + £30 = £1,030
       // Folding: 60 units × £15 + £20 = £920
       // Enclosing: 60 units × £25 + £50 = £1,550
       // Subtotal: £3,500
-      // VAT (20%): £700
-      // Total: £4,200
+      // Total: £3,500 (no VAT - quotes are net-only)
 
       expect(lithoLine.lineTotalExVat.toNumber()).toBe(1030);
       expect(foldLine.lineTotalExVat.toNumber()).toBe(920);
       expect(encLine.lineTotalExVat.toNumber()).toBe(1550);
       expect(totals.subtotal.toNumber()).toBe(3500);
-      expect(totals.vat.toNumber()).toBe(700);
-      expect(totals.total.toNumber()).toBe(4200);
+      expect(totals.total.toNumber()).toBe(3500);
     });
 
     it('Small job example: 5k, 1 insert, 0% VAT', () => {
@@ -401,7 +396,7 @@ describe('Pricing Engine', () => {
       });
 
       const line = calculateLine(litho, litho.bands[0] as any, 5000, 1);
-      const totals = calculateTotals([line], 0);
+      const totals = calculateTotals([line]);
 
       // 5 units × £60 + £35 = £335
       expect(line.lineTotalExVat.toNumber()).toBe(335);

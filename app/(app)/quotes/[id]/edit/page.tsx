@@ -3,13 +3,19 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { calculateTotals } from '@/lib/pricing';
 import { QuoteBuilder } from '@/components/quotes/quote-builder';
+import { getAuthenticatedUser } from '@/lib/auth';
 
-export default async function EditQuotePage({ params }: { params: { id: string } }) {
+export default async function EditQuotePage({ params }: { params: Promise<{ id: string }> }) {
+  // SECURITY: Require authentication
+  const user = await getAuthenticatedUser();
+  const { id } = await params;
+
   const [quote, rateCards] = await Promise.all([
     prisma.quote.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
-        lines: { orderBy: { createdAt: 'asc' } }
+        lines: { orderBy: { createdAt: 'asc' } },
+        user: true
       }
     }),
     prisma.rateCard.findMany({ include: { bands: { orderBy: { fromQty: 'asc' } } }, orderBy: { name: 'asc' } })
@@ -17,6 +23,11 @@ export default async function EditQuotePage({ params }: { params: { id: string }
 
   if (!quote) {
     notFound();
+  }
+
+  // SECURITY: Verify ownership
+  if (quote.userId !== user.id) {
+    notFound(); // Don't reveal quote exists
   }
 
   const totals = calculateTotals(
@@ -27,8 +38,7 @@ export default async function EditQuotePage({ params }: { params: { id: string }
       makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
       unitsInThousands: new Decimal(line.unitsInThousands.toString()),
       lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-    })),
-    Number(quote.vatRate)
+    }))
   );
 
   const serialisedRateCards = rateCards.map((card) => ({
@@ -65,7 +75,6 @@ export default async function EditQuotePage({ params }: { params: { id: string }
     })),
     totals: {
       subtotal: totals.subtotal.toNumber(),
-      vat: totals.vat.toNumber(),
       total: totals.total.toNumber()
     }
   };

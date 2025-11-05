@@ -2,10 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Print-specific styles - hide navigation elements when generating PDF */
+@media print {
+  /* Hide ONLY AppShell navigation elements - be very specific */
+  /* Target the AppShell wrapper specifically */
+  aside,
+  nav,
+  header.sticky,
+  header.border-b,
+  button[aria-label="Open menu"],
+  button[aria-label="Close menu"],
+  [role="navigation"],
+  .no-print,
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* CRITICAL: Force visibility of ALL PDF content */
+  /* Ensure QuotePdf component is always visible */
+  body > div > div,
+  body > div > div > div,
+  div[style*="padding: 48px"],
+  div[style*="padding:48px"],
+  div[style*="padding: '48px'"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+  }
+  
+  /* Ensure all content inside PDF is visible */
+  header,
+  section,
+  table,
+  footer {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Ensure full width for print */
+  body {
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+
+  /* Remove any margins/padding that might interfere */
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Ensure main content takes full width */
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}
+
+/* DMC Encore Brand Fonts */
+@font-face {
+  font-family: "Futura PT Light";
+  font-display: swap;
+  src: url("https://dmc-encore.co.uk/wp-content/uploads/et-fonts/futura-light-bt.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Futura PT";
+  font-display: swap;
+  src: url("https://dmc-encore.co.uk/wp-content/uploads/et-fonts/futura-medium-bt.ttf") format("truetype");
+}
+
 :root {
   color-scheme: light;
 }
 
 body {
   @apply bg-slate-100 text-slate-900 antialiased;
+  font-family: 'Futura PT', Helvetica, Arial, system-ui, -apple-system, sans-serif;
 }

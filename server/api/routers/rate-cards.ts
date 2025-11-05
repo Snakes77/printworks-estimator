@@ -1,24 +1,24 @@
 import { z } from 'zod';
-import { createTRPCRouter, protectedProcedure, publicProcedure } from '@/server/api/trpc';
+import { createTRPCRouter, protectedProcedure } from '@/server/api/trpc';
 
 const bandSchema = z.object({
   id: z.string().optional(),
-  fromQty: z.number().int().min(1),
-  toQty: z.number().int().min(1),
-  pricePerThousand: z.number().nonnegative(),
-  makeReadyFixed: z.number().nonnegative()
+  fromQty: z.number().int().min(1).max(10_000_000),
+  toQty: z.number().int().min(1).max(10_000_000),
+  pricePerThousand: z.number().nonnegative().max(999_999.99),
+  makeReadyFixed: z.number().nonnegative().max(999_999.99)
 });
 
 const rateCardSchema = z.object({
-  code: z.string().trim().min(2),
-  name: z.string().trim().min(2),
+  code: z.string().trim().min(2).max(50),
+  name: z.string().trim().min(2).max(200),
   unit: z.enum(['per_1k', 'job', 'enclose']),
   notes: z.string().trim().max(500).optional(),
-  bands: z.array(bandSchema).min(1)
+  bands: z.array(bandSchema).min(1).max(50)
 });
 
 export const rateCardsRouter = createTRPCRouter({
-  list: publicProcedure.query(async ({ ctx }) => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.rateCard.findMany({
       include: {
         bands: {
@@ -28,7 +28,7 @@ export const rateCardsRouter = createTRPCRouter({
       orderBy: { name: 'asc' }
     });
   }),
-  get: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+  get: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     return ctx.prisma.rateCard.findUnique({
       where: { id: input.id },
       include: {
@@ -63,7 +63,7 @@ export const rateCardsRouter = createTRPCRouter({
       const { id, bands, ...rest } = input;
 
       return ctx.prisma.$transaction(async (tx) => {
-        const updatedCard = await tx.rateCard.update({
+        await tx.rateCard.update({
           where: { id },
           data: rest
         });

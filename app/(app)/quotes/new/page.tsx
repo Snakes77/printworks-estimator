@@ -1,7 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { QuoteBuilder } from '@/components/quotes/quote-builder';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export default async function NewQuotePage() {
+  // SECURITY: Require authentication
+  await getAuthenticatedUser();
+
   const rateCards = await prisma.rateCard.findMany({
     include: { bands: { orderBy: { fromQty: 'asc' } } },
     orderBy: { name: 'asc' }

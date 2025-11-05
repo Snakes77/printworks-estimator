@@ -6,12 +6,12 @@ import { Session } from '@supabase/supabase-js';
 
 export const SupabaseProvider = ({
   children,
-  initialSession
+  initialSession: _initialSession
 }: {
   children: React.ReactNode;
   initialSession: Session | null;
 }) => {
-  const [supabase] = useState(() => createSupabaseBrowserClient());
+  const [_supabase] = useState(() => createSupabaseBrowserClient());
 
   return <>{children}</>;
 };

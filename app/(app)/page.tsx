@@ -1,25 +1,16 @@
 import Link from 'next/link';
 import Decimal from 'decimal.js';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { ensurePrismaUser } from '@/lib/app-user';
 import { prisma } from '@/lib/prisma';
 import { calculateTotals } from '@/lib/pricing';
+import { formatGBP } from '@/lib/pricing';
+import { getAuthenticatedUser } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatGBP } from '@/lib/pricing';
 
 export default async function DashboardPage() {
-  // TEMPORARY: Use seeded demo user
-  const demoUser = await prisma.user.findUnique({
-    where: { email: 'dave@example.co.uk' }
-  });
-
-  if (!demoUser) {
-    return <div>Demo user not found. Please run: npx prisma db seed</div>;
-  }
-
-  const appUser = demoUser;
+  // SECURITY: Require authentication
+  const appUser = await getAuthenticatedUser();
 
   const recentQuotes = await prisma.quote.findMany({
     where: { userId: appUser.id },
@@ -38,8 +29,7 @@ export default async function DashboardPage() {
         makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
         unitsInThousands: new Decimal(line.unitsInThousands.toString()),
         lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-      })),
-      Number(quote.vatRate)
+      }))
     )
   }));
 

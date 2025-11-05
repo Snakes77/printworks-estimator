@@ -3,10 +3,13 @@
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useState } from 'react';
 import { trpc } from '@/lib/trpc/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { formatGBP } from '@/lib/pricing';
 
 type QuoteLine = {
@@ -34,7 +37,6 @@ type QuoteViewProps = {
     quantity: number;
     envelopeType: string;
     insertsCount: number;
-    vatRate: number;
     pdfUrl: string | null;
     createdAt: string;
     updatedAt: string;
@@ -42,13 +44,15 @@ type QuoteViewProps = {
     history: QuoteHistoryEntry[];
     totals: {
       subtotal: number;
-      vat: number;
       total: number;
     };
   };
 };
 
 export const QuoteView = ({ quote }: QuoteViewProps) => {
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailAddress, setEmailAddress] = useState('');
+
   const generatePdf = trpc.quotes.generatePdf.useMutation({
     onSuccess: (data) => {
       toast.success('PDF generated successfully.');
@@ -56,13 +60,36 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
         window.open(data.pdfUrl, '_blank');
       }
     },
-    onError: () => {
-      toast.error('Unable to generate the PDF.');
+    onError: (error) => {
+      console.error('PDF generation error:', error);
+      const errorMessage = error.message || 'Unable to generate the PDF.';
+      toast.error(errorMessage);
+    }
+  });
+
+  const sendEmail = trpc.quotes.sendEmail.useMutation({
+    onSuccess: () => {
+      toast.success('Email sent successfully!');
+      setEmailOpen(false);
+      setEmailAddress('');
+    },
+    onError: (error) => {
+      console.error('Email send error:', error);
+      const errorMessage = error.message || 'Unable to send email.';
+      toast.error(errorMessage);
     }
   });
 
   const handleGeneratePdf = () => {
     generatePdf.mutate({ quoteId: quote.id });
+  };
+
+  const handleSendEmail = () => {
+    if (!emailAddress || !emailAddress.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    sendEmail.mutate({ quoteId: quote.id, to: emailAddress });
   };
 
   return (
@@ -81,14 +108,52 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
           <Button variant="secondary" onClick={handleGeneratePdf} disabled={generatePdf.isPending}>
             {generatePdf.isPending ? 'Generating…' : 'Generate PDF'}
           </Button>
-          {quote.pdfUrl && (
-            <Button asChild>
-              <Link href={quote.pdfUrl} target="_blank" rel="noopener noreferrer">
-                Download PDF
-              </Link>
-            </Button>
-          )}
+          <Button 
+            variant="primary" 
+            onClick={() => setEmailOpen(!emailOpen)} 
+            disabled={sendEmail.isPending}
+          >
+            {sendEmail.isPending ? 'Sending…' : 'Send Email'}
+          </Button>
         </div>
+        {emailOpen && (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Send Quote by Email</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Recipient Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="client@example.com"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSendEmail();
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleSendEmail} 
+                  disabled={sendEmail.isPending || !emailAddress}
+                >
+                  {sendEmail.isPending ? 'Sending…' : 'Send'}
+                </Button>
+                <Button variant="secondary" onClick={() => {
+                  setEmailOpen(false);
+                  setEmailAddress('');
+                }}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
@@ -127,16 +192,8 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
             <CardTitle>Totals</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">Subtotal (ex VAT)</span>
-              <span className="font-medium">{formatGBP(quote.totals.subtotal)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">VAT ({quote.vatRate}%)</span>
-              <span className="font-medium">{formatGBP(quote.totals.vat)}</span>
-            </div>
             <div className="flex items-center justify-between text-base font-semibold text-slate-900">
-              <span>Total (inc VAT)</span>
+              <span>Total</span>
               <span>{formatGBP(quote.totals.total)}</span>
             </div>
           </CardContent>
@@ -164,15 +221,99 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
           <CardTitle>History</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {quote.history.map((entry) => (
-            <div key={entry.id} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-              <div>
-                <p className="font-medium text-slate-800">{entry.action.replace(/_/g, ' ')}</p>
-                <p className="text-xs text-slate-500">{JSON.stringify(entry.payload)}</p>
+          {quote.history.map((entry) => {
+            const renderPayload = () => {
+              const payload = entry.payload as Record<string, unknown>;
+              
+              // Handle EMAIL_SENT action
+              if (entry.action === 'EMAIL_SENT' && payload.to) {
+                const emailTo = String(payload.to);
+                const emailId = payload.emailId ? String(payload.emailId) : null;
+                return (
+                  <div className="mt-1 space-y-0.5 text-xs text-slate-500">
+                    <p>Email sent to: <span className="font-medium">{emailTo}</span></p>
+                    {emailId && (
+                      <p className="text-slate-400">Email ID: {emailId.substring(0, 8)}...</p>
+                    )}
+                  </div>
+                );
+              }
+              
+              // Handle CREATED action
+              if (entry.action === 'CREATED' && payload.totals && typeof payload.totals === 'object') {
+                const totals = payload.totals as { total?: string | number };
+                return (
+                  <div className="mt-1 space-y-0.5 text-xs text-slate-500">
+                    <p>Total: {formatGBP(Number(totals.total))}</p>
+                    <p className="text-slate-400">
+                      {Array.isArray(payload.lines) ? `${payload.lines.length} line${payload.lines.length !== 1 ? 's' : ''}` : ''}
+                    </p>
+                  </div>
+                );
+              }
+              
+              // Handle PDF_GENERATED action
+              if (entry.action === 'PDF_GENERATED' && payload.totals && typeof payload.totals === 'object') {
+                const totals = payload.totals as { total?: string | number };
+                const pdfUrl = payload.pdfUrl ? String(payload.pdfUrl) : null;
+                return (
+                  <div className="mt-1 space-y-0.5 text-xs text-slate-500">
+                    <p>PDF generated • Total: {formatGBP(Number(totals.total))}</p>
+                    {pdfUrl && (
+                      <a
+                        href={pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        View PDF →
+                      </a>
+                    )}
+                  </div>
+                );
+              }
+              
+              // Handle UPDATE action or other actions
+              if (entry.action === 'UPDATED' && payload.totals && typeof payload.totals === 'object') {
+                const totals = payload.totals as { total?: string | number };
+                return (
+                  <div className="mt-1 text-xs text-slate-500">
+                    <p>Total: {formatGBP(Number(totals.total))}</p>
+                  </div>
+                );
+              }
+              
+              // Fallback for unknown payloads
+              if (Object.keys(payload).length > 0) {
+                return (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600">
+                      View details
+                    </summary>
+                    <pre className="mt-1 text-xs text-slate-500 overflow-auto">
+                      {JSON.stringify(payload, null, 2)}
+                    </pre>
+                  </details>
+                );
+              }
+              
+              return null;
+            };
+
+            return (
+              <div key={entry.id} className="flex items-start justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                <div className="flex-1">
+                  <p className="font-medium text-slate-800 capitalize">
+                    {entry.action.replace(/_/g, ' ').toLowerCase()}
+                  </p>
+                  {renderPayload()}
+                </div>
+                <span className="ml-4 text-xs text-slate-500 whitespace-nowrap">
+                  {format(new Date(entry.createdAt), 'dd MMM yyyy HH:mm')}
+                </span>
               </div>
-              <span className="text-xs text-slate-500">{format(new Date(entry.createdAt), 'dd MMM yyyy HH:mm')}</span>
-            </div>
-          ))}
+            );
+          })}
           {quote.history.length === 0 && <p className="text-slate-500">No history yet.</p>}
         </CardContent>
       </Card>

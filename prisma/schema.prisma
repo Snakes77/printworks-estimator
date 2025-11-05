@@ -4,7 +4,17 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("SUPABASE_DB_URL")
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  company   String?
+  quotes    Quote[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model User {
@@ -41,6 +51,7 @@ model Band {
 model Quote {
   id           String    @id @default(cuid())
   userId       String
+  clientId     String?
   clientName   String
   projectName  String
   reference    String
@@ -53,6 +64,7 @@ model Quote {
   lines        QuoteLine[]
   pdfUrl       String?
   user         User      @relation(fields: [userId], references: [id])
+  client       Client?   @relation(fields: [clientId], references: [id])
   history      QuoteHistory[]
 }
 
@@ -76,7 +88,10 @@ model QuoteHistory {
   quoteId   String
   action    String
   payload   Json
+  meta      Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 }
+
+// AuditEvent is an alias for QuoteHistory - use QuoteHistory for consistency

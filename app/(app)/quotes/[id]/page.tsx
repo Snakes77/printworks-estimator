@@ -3,10 +3,15 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { calculateTotals } from '@/lib/pricing';
 import { QuoteView } from '@/components/quotes/quote-view';
+import { getAuthenticatedUser } from '@/lib/auth';
 
-export default async function QuoteDetailPage({ params }: { params: { id: string } }) {
+export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // SECURITY: Require authentication
+  const user = await getAuthenticatedUser();
+  const { id } = await params;
+
   const quote = await prisma.quote.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       lines: { orderBy: { createdAt: 'asc' } },
       history: { orderBy: { createdAt: 'desc' } },
@@ -18,6 +23,11 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
     notFound();
   }
 
+  // SECURITY: Verify ownership
+  if (quote.userId !== user.id) {
+    notFound(); // Don't reveal quote exists
+  }
+
   const totals = calculateTotals(
     quote.lines.map((line) => ({
       rateCardId: line.rateCardId,
@@ -26,8 +36,7 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
       makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
       unitsInThousands: new Decimal(line.unitsInThousands.toString()),
       lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-    })),
-    Number(quote.vatRate)
+    }))
   );
 
   const serialisedQuote = {
@@ -38,7 +47,6 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
     quantity: quote.quantity,
     envelopeType: quote.envelopeType,
     insertsCount: quote.insertsCount,
-    vatRate: Number(quote.vatRate),
     pdfUrl: quote.pdfUrl,
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
@@ -58,7 +66,6 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
     })),
     totals: {
       subtotal: totals.subtotal.toNumber(),
-      vat: totals.vat.toNumber(),
       total: totals.total.toNumber()
     }
   };

@@ -1,30 +1,38 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
+import { cookies } from 'next/headers';
 import { createSupabaseRouteClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
 
 export const createTRPCContext = async () => {
+  const cookieStore = await cookies();
   const supabase = await createSupabaseRouteClient();
   const {
     data: { user }
   } = await supabase.auth.getUser();
 
-  // TEMPORARY: Use demo user for development
-  const demoUser = user || {
-    id: 'demo-user-id',
-    email: 'dave@example.co.uk',
-    app_metadata: {},
-    user_metadata: { full_name: 'Demo User' },
-    aud: 'authenticated',
-    created_at: new Date().toISOString(),
-    role: 'authenticated',
-    updated_at: new Date().toISOString()
-  };
+  // SECURITY: Require authentication - NO demo user fallback
+  if (!user || !user.id) {
+    // Return context without user - protectedProcedure will handle rejection
+    return {
+      supabase,
+      prisma,
+      user: null,
+      cookies: []
+    };
+  }
+
+  // Extract authentication cookies for PDF generation
+  const authCookies = cookieStore.getAll().map(cookie => ({
+    name: cookie.name,
+    value: cookie.value
+  }));
 
   return {
     supabase,
     prisma,
-    user: demoUser as any
+    user: user,
+    cookies: authCookies
   };
 };
 
@@ -38,15 +46,19 @@ export const createTRPCRouter = t.router;
 export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-  if (!ctx.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  if (!ctx.user || !ctx.user.id) {
+    throw new TRPCError({ 
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required. Please sign in.'
+    });
   }
 
   return next({
     ctx: {
       user: ctx.user,
       prisma: ctx.prisma,
-      supabase: ctx.supabase
+      supabase: ctx.supabase,
+      cookies: ctx.cookies
     }
   });
 });

@@ -55,8 +55,6 @@ export const QuotesTable = () => {
               <TableHead className="text-right">Quantity</TableHead>
               <TableHead>Envelope</TableHead>
               <TableHead className="text-right">Inserts</TableHead>
-              <TableHead className="text-right">Subtotal</TableHead>
-              <TableHead className="text-right">VAT</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Updated</TableHead>
               <TableHead>Actions</TableHead>
@@ -70,8 +68,6 @@ export const QuotesTable = () => {
                 <TableCell className="text-right">{quote.quantity.toLocaleString('en-GB')}</TableCell>
                 <TableCell>{quote.envelopeType}</TableCell>
                 <TableCell className="text-right">{quote.insertsCount}</TableCell>
-                <TableCell className="text-right">{formatGBP(quote.totals.subtotal)}</TableCell>
-                <TableCell className="text-right">{formatGBP(quote.totals.vat)}</TableCell>
                 <TableCell className="text-right">{formatGBP(quote.totals.total)}</TableCell>
                 <TableCell>{new Date(quote.updatedAt).toLocaleDateString('en-GB')}</TableCell>
                 <TableCell>
@@ -88,7 +84,7 @@ export const QuotesTable = () => {
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="py-6 text-center text-sm text-slate-500">
+                <TableCell colSpan={8} className="py-6 text-center text-sm text-slate-500">
                   {quotesQuery.isLoading ? 'Loading quotes…' : 'No quotes match your filters yet.'}
                 </TableCell>
               </TableRow>
