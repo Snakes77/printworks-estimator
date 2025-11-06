@@ -360,24 +360,85 @@ export const quotesRouter = createTRPCRouter({
         // SECURITY: Rate limit PDF generation
         await checkRateLimit(user.id, RATE_LIMITS.PDF_GENERATION);
 
-        // SECURITY: Verify ownership before generating PDF URL
+        // SECURITY: Verify ownership before generating PDF
         await verifyQuoteOwnership(input.quoteId, user.id);
 
-        // Return print URL - browser will handle PDF generation
+        // Get quote details
+        const quote = await ctx.prisma.quote.findUnique({
+          where: { id: input.quoteId },
+          include: { lines: true }
+        });
+
+        if (!quote) {
+          throw new Error('Quote not found');
+        }
+
+        // Generate PDF using PDF.co
         const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
         const printUrl = `${baseUrl}/quotes/${input.quoteId}/print`;
 
-        console.log('[tRPC] generatePdf: Returning print URL for browser-based PDF');
+        if (!isPdfCoConfigured()) {
+          throw new Error('PDF.co is not configured. Please set PDFCO_API_KEY.');
+        }
+
+        console.log('[tRPC] generatePdf: Generating PDF via PDF.co...');
+        const pdfBuffer = await generatePdfFromUrl({
+          url: printUrl,
+          fileName: `quote-${quote.reference}.pdf`,
+        });
+
+        console.log('[tRPC] generatePdf: PDF generated successfully, size:', pdfBuffer.length);
+
+        // Upload to Supabase Storage
+        const serviceClient = createSupabaseServiceRoleClient();
+        const storage = serviceClient.storage.from('quotes');
+        const filePath = `${input.quoteId}.pdf`;
+
+        const uploadResult = await storage.upload(filePath, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+
+        if (uploadResult.error) {
+          console.error('[tRPC] generatePdf: Upload error:', uploadResult.error);
+          throw new Error(`Failed to upload PDF: ${uploadResult.error.message}`);
+        }
+
+        // Get signed URL (valid for 1 hour)
+        const { data: signedUrlData } = await storage.createSignedUrl(filePath, 3600);
+        if (!signedUrlData?.signedUrl) {
+          throw new Error('Failed to generate signed URL');
+        }
+
+        const pdfUrl = signedUrlData.signedUrl;
+        console.log('[tRPC] generatePdf: PDF uploaded and URL generated');
+
+        // Add to history
+        await ctx.prisma.quote.update({
+          where: { id: input.quoteId },
+          data: {
+            pdfUrl,
+            history: {
+              create: {
+                action: 'PDF_GENERATED',
+                payload: {
+                  pdfUrl,
+                  fileSize: pdfBuffer.length,
+                  timestamp: new Date().toISOString(),
+                }
+              }
+            }
+          }
+        });
 
         return {
-          printUrl,
-          pdfUrl: printUrl, // For compatibility
-          totals: { subtotal: 0, total: 0 } // Placeholder
+          pdfUrl,
+          success: true,
         };
       } catch (error) {
         console.error('[tRPC] generatePdf: Error occurred:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to generate PDF URL: ${errorMessage}`);
+        throw new Error(`Failed to generate PDF: ${errorMessage}`);
       }
     }),
   sendEmail: protectedProcedure
