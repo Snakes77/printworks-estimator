@@ -31,6 +31,8 @@ const serialiseLine = (line: {
 
 const serialiseTotals = (totals: ReturnType<typeof calculateTotals>) => ({
   subtotal: totals.subtotal.toNumber(),
+  discount: totals.discount.toNumber(),
+  discountPercentage: totals.discountPercentage.toNumber(),
   total: totals.total.toNumber()
 });
 
@@ -46,6 +48,7 @@ const quotePayloadSchema = z.object({
   quantity: z.number().int().positive().max(1_000_000),
   envelopeType: z.string().trim().min(1).max(50),
   insertsCount: z.number().int().min(0).max(100),
+  discountPercentage: z.number().min(0).max(100).default(0),
   lines: z.array(lineSelectionSchema).min(1).max(100)
 });
 
@@ -90,7 +93,8 @@ export const quotesRouter = createTRPCRouter({
             makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
             unitsInThousands: new Decimal(line.unitsInThousands.toString()),
             lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-          }))
+          })),
+          Number(quote.discountPercentage)
         );
 
         return {
@@ -139,7 +143,8 @@ export const quotesRouter = createTRPCRouter({
         makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
         unitsInThousands: new Decimal(line.unitsInThousands.toString()),
         lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-      }))
+      })),
+      Number(quote.discountPercentage)
     );
 
     return {
@@ -174,7 +179,7 @@ export const quotesRouter = createTRPCRouter({
     });
 
     const lines = calculateQuoteLines(input.quantity, input.insertsCount, orderedCards);
-    const totals = calculateTotals(lines);
+    const totals = calculateTotals(lines, input.discountPercentage);
 
     return {
       lines: lines.map((line) => ({
@@ -217,11 +222,12 @@ export const quotesRouter = createTRPCRouter({
       return calculateLine(card, band, input.quantity, input.insertsCount);
     });
 
-    const totals = calculateTotals(lineCalculations);
+    const totals = calculateTotals(lineCalculations, input.discountPercentage);
 
     const quote = await ctx.prisma.quote.create({
       data: {
         userId: user.id,
+        discountPercentage: new Prisma.Decimal(input.discountPercentage.toString()),
         clientName: input.clientName,
         projectName: input.projectName,
         reference: input.reference,
@@ -305,7 +311,7 @@ export const quotesRouter = createTRPCRouter({
         return calculateLine(card, band, input.quantity, input.insertsCount);
       });
 
-      const totals = calculateTotals(lineCalculations);
+      const totals = calculateTotals(lineCalculations, input.discountPercentage);
 
       // Track what changed for history
       const changes: string[] = [];
@@ -324,6 +330,9 @@ export const quotesRouter = createTRPCRouter({
       }
       if (existing.insertsCount !== input.insertsCount) {
         changes.push(`Inserts: ${existing.insertsCount} → ${input.insertsCount}`);
+      }
+      if (Number(existing.discountPercentage) !== input.discountPercentage) {
+        changes.push(`Discount: ${existing.discountPercentage}% → ${input.discountPercentage}%`);
       }
 
       // Track line changes
@@ -358,6 +367,7 @@ export const quotesRouter = createTRPCRouter({
           quantity: input.quantity,
           envelopeType: input.envelopeType,
           insertsCount: input.insertsCount,
+          discountPercentage: new Prisma.Decimal(input.discountPercentage.toString()),
           vatRate: new Prisma.Decimal(0), // Quotes don't include VAT, set to 0 for backward compatibility
           lines: {
             create: lineCalculations.map((line) => ({

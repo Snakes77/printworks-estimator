@@ -77,13 +77,19 @@ export const calculateQuoteLines = (
   });
 };
 
-export const calculateTotals = (lines: QuoteLineCalculation[]) => {
+export const calculateTotals = (lines: QuoteLineCalculation[], discountPercentage: number = 0) => {
   const subtotal = lines.reduce((acc, line) => acc.add(line.lineTotalExVat), new Decimal(0));
-  
-  // Quotes don't include VAT - subtotal equals total
+
+  // Apply discount if specified
+  const discountDecimal = new Decimal(discountPercentage).div(100);
+  const discountAmount = subtotal.mul(discountDecimal);
+  const total = subtotal.sub(discountAmount);
+
   return {
     subtotal,
-    total: subtotal
+    discount: discountAmount,
+    discountPercentage: new Decimal(discountPercentage),
+    total
   };
 };
 

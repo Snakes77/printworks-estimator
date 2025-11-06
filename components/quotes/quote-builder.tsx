@@ -22,7 +22,8 @@ const quoteSchema = z.object({
   reference: z.string().min(1, 'Reference is required'),
   quantity: z.coerce.number().int().positive('Quantity must be a whole number'),
   envelopeType: z.string().min(1),
-  insertsCount: z.coerce.number().int().min(0)
+  insertsCount: z.coerce.number().int().min(0),
+  discountPercentage: z.coerce.number().min(0).max(100)
 });
 
 type QuoteFormValues = z.infer<typeof quoteSchema>;
@@ -59,9 +60,12 @@ type ExistingQuote = {
   quantity: number;
   envelopeType: string;
   insertsCount: number;
+  discountPercentage?: number;
   lines: PreviewLine[];
   totals: {
     subtotal: number;
+    discount?: number;
+    discountPercentage?: number;
     total: number;
   };
 };
@@ -95,7 +99,8 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           reference: existingQuote.reference,
           quantity: existingQuote.quantity,
           envelopeType: existingQuote.envelopeType,
-          insertsCount: existingQuote.insertsCount
+          insertsCount: existingQuote.insertsCount,
+          discountPercentage: existingQuote.discountPercentage ?? 0
         }
       : {
           clientName: '',
@@ -103,12 +108,14 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           reference: '',
           quantity: 20000,
           envelopeType: 'C5',
-          insertsCount: 1
+          insertsCount: 1,
+          discountPercentage: 0
         }
   });
 
   const quantity = form.watch('quantity');
   const insertsCount = form.watch('insertsCount');
+  const discountPercentage = form.watch('discountPercentage');
 
   // Preview for currently selected (but not yet added) rate card
   const selectedCardPreview = trpc.quotes.preview.useMutation();
@@ -124,7 +131,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       lines: selectedRateCardIds.map((id) => ({ rateCardId: id }))
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRateCardIds, quantity, insertsCount]);
+  }, [selectedRateCardIds, quantity, insertsCount, discountPercentage]);
 
   // Live preview when a card is selected in dropdown
   useEffect(() => {
@@ -138,7 +145,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       lines: [{ rateCardId: selectedCardId }]
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCardId, quantity, insertsCount]);
+  }, [selectedCardId, quantity, insertsCount, discountPercentage]);
 
   const availableCards = useMemo(
     () => rateCards.filter((card) => !selectedRateCardIds.includes(card.id)),
@@ -410,10 +417,34 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           <CardHeader>
             <CardTitle>Totals</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex items-center justify-between text-base font-semibold text-slate-900">
-              <span>Total</span>
-              <span>{formatGBP(totals.total ?? 0)}</span>
+          <CardContent className="space-y-3 text-sm">
+            <div className="space-y-2">
+              <Label htmlFor="discountPercentage">Discount %</Label>
+              <Input
+                id="discountPercentage"
+                type="number"
+                min={0}
+                max={100}
+                step={0.01}
+                placeholder="0"
+                {...form.register('discountPercentage', { valueAsNumber: true })}
+              />
+            </div>
+            <div className="border-t border-slate-200 pt-3 space-y-2">
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Subtotal</span>
+                <span className="font-mono">{formatGBP(totals.subtotal ?? 0)}</span>
+              </div>
+              {(totals.discount ?? 0) > 0 && (
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Discount ({totals.discountPercentage ?? 0}%)</span>
+                  <span className="font-mono text-red-600">-{formatGBP(totals.discount ?? 0)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-lg font-bold text-slate-900 border-t border-slate-200 pt-2">
+                <span>Total</span>
+                <span className="font-mono">{formatGBP(totals.total ?? 0)}</span>
+              </div>
             </div>
           </CardContent>
           <CardFooter className="flex gap-3">
