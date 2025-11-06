@@ -380,14 +380,14 @@ export const quotesRouter = createTRPCRouter({
       }
     }),
   sendEmail: protectedProcedure
-    .input(z.object({ 
+    .input(z.object({
       quoteId: z.string(),
       to: z.string().email('Invalid email address')
     }))
     .mutation(async ({ ctx, input }) => {
       try {
         const user = await ensurePrismaUser(ctx.user);
-        
+
         // SECURITY: Verify ownership before sending email
         await verifyQuoteOwnership(input.quoteId, user.id);
 
@@ -403,59 +403,18 @@ export const quotesRouter = createTRPCRouter({
           throw new Error('Quote not found');
         }
 
-        // Generate PDF if not already generated or URL expired
-        let pdfBuffer: Buffer;
-        let pdfUrl: string;
+        // Use print URL instead of generating PDF
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
+        const printUrl = `${baseUrl}/quotes/${input.quoteId}/print`;
 
-        if (quote.pdfUrl) {
-          // Try to use existing PDF URL (may be expired)
-          pdfUrl = quote.pdfUrl;
-          // Still generate PDF buffer for attachment
-          console.log('[tRPC] sendEmail: Generating PDF buffer for attachment...');
-          const { pdf } = await generateQuotePdfBuffer(input.quoteId, user.id, ctx.cookies);
-          pdfBuffer = Buffer.from(pdf);
-        } else {
-          // Generate PDF and upload
-          console.log('[tRPC] sendEmail: Generating PDF...');
-          const { pdf, totals } = await generateQuotePdfBuffer(input.quoteId, user.id, ctx.cookies);
-          pdfBuffer = Buffer.from(pdf);
-
-          // Upload to storage
-          const serviceClient = createSupabaseServiceRoleClient();
-          const storage = serviceClient.storage.from('quotes');
-          const filePath = `${input.quoteId}.pdf`;
-          
-          const uploadResult = await storage.upload(filePath, pdf, {
-            contentType: 'application/pdf',
-            upsert: true
-          });
-
-          if (uploadResult.error) {
-            throw uploadResult.error;
-          }
-
-          // Generate signed URL (24 hours for email)
-          const { data: signedUrlData } = await storage.createSignedUrl(filePath, 86400); // 24 hours
-          if (!signedUrlData?.signedUrl) {
-            throw new Error('Failed to generate signed URL');
-          }
-          pdfUrl = signedUrlData.signedUrl;
-
-          // Update quote with PDF URL
-          await ctx.prisma.quote.update({
-            where: { id: input.quoteId },
-            data: { pdfUrl }
-          });
-        }
-
-        // Send email
+        // Send email with print URL
         console.log('[tRPC] sendEmail: Sending email to:', input.to);
         const emailId = await sendQuoteEmail({
           to: input.to,
           quoteReference: quote.reference,
           clientName: quote.clientName,
-          pdfUrl,
-          pdfBuffer
+          pdfUrl: printUrl,
+          // No PDF buffer - user will print from browser
         });
 
         if (!emailId) {
