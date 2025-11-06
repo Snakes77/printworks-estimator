@@ -119,23 +119,30 @@ export const generateQuotePdfBuffer = async (
   try {
     console.log('[PDF] Starting PDF generation for quote:', quoteId);
     console.log('[PDF] Environment:', isProduction ? 'production' : 'development');
-    
+
+    // Debug logging for Chromium
+    console.log('[PDF] Chromium version:', require('@sparticuz/chromium/package.json').version);
+    console.log('[PDF] Executable path:', await chromium.executablePath());
+    console.log('[PDF] Args length:', chromium.args.length);
+
     // Get executable path
     const executablePath = await getExecutablePath();
-    console.log('[PDF] Executable path:', executablePath || 'not found');
-    
+    console.log('[PDF] Final executable path:', executablePath || 'not found');
+
     if (!executablePath) {
       throw new Error('Chrome/Chromium executable not found. Please set CHROME_EXECUTABLE_PATH environment variable.');
     }
-    
-    // Verify executable exists and is accessible
-    try {
-      const fs = await import('fs/promises');
-      await fs.access(executablePath);
-      console.log('[PDF] Executable verified:', executablePath);
-    } catch (accessError) {
-      console.error('[PDF] Executable path not accessible:', executablePath);
-      throw new Error(`Chrome executable not accessible at ${executablePath}. Please check CHROME_EXECUTABLE_PATH.`);
+
+    // Verify executable exists and is accessible in development only
+    if (!isProduction) {
+      try {
+        const fs = await import('fs/promises');
+        await fs.access(executablePath);
+        console.log('[PDF] Executable verified:', executablePath);
+      } catch (accessError) {
+        console.error('[PDF] Executable path not accessible:', executablePath);
+        throw new Error(`Chrome executable not accessible at ${executablePath}. Please check CHROME_EXECUTABLE_PATH.`);
+      }
     }
 
     // Configure browser launch options
@@ -145,11 +152,10 @@ export const generateQuotePdfBuffer = async (
     };
 
     if (isProduction) {
-      // CRITICAL: Use chromium.args directly - do NOT modify them
-      // @sparticuz/chromium configures library paths and other required settings
-      console.log('[PDF] Using @sparticuz/chromium configuration for Vercel');
+      console.log('[PDF] Production mode - using @sparticuz/chromium');
       launchOptions.args = chromium.args;
       launchOptions.defaultViewport = chromium.defaultViewport;
+      launchOptions.executablePath = await chromium.executablePath();
       launchOptions.headless = chromium.headless;
     } else {
       // Development: minimal args for local Chrome
