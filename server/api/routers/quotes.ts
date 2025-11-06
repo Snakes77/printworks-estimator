@@ -307,6 +307,48 @@ export const quotesRouter = createTRPCRouter({
 
       const totals = calculateTotals(lineCalculations);
 
+      // Track what changed for history
+      const changes: string[] = [];
+
+      if (existing.quantity !== input.quantity) {
+        changes.push(`Quantity: ${existing.quantity.toLocaleString()} → ${input.quantity.toLocaleString()}`);
+      }
+      if (existing.clientName !== input.clientName) {
+        changes.push(`Client: "${existing.clientName}" → "${input.clientName}"`);
+      }
+      if (existing.projectName !== input.projectName) {
+        changes.push(`Project: "${existing.projectName}" → "${input.projectName}"`);
+      }
+      if (existing.envelopeType !== input.envelopeType) {
+        changes.push(`Envelope: ${existing.envelopeType} → ${input.envelopeType}`);
+      }
+      if (existing.insertsCount !== input.insertsCount) {
+        changes.push(`Inserts: ${existing.insertsCount} → ${input.insertsCount}`);
+      }
+
+      // Track line changes
+      const existingLineIds = existing.lines.map(l => l.rateCardId).sort();
+      const newLineIds = input.lines.map(l => l.rateCardId).sort();
+
+      const addedLines = newLineIds.filter(id => !existingLineIds.includes(id));
+      const removedLines = existingLineIds.filter(id => !newLineIds.includes(id));
+
+      if (addedLines.length > 0) {
+        const addedNames = addedLines.map(id => {
+          const card = rateCards.find(rc => rc.id === id);
+          return card?.name || 'Unknown';
+        });
+        changes.push(`Added: ${addedNames.join(', ')}`);
+      }
+
+      if (removedLines.length > 0) {
+        const removedNames = removedLines.map(id => {
+          const line = existing.lines.find(l => l.rateCardId === id);
+          return line?.description || 'Unknown';
+        });
+        changes.push(`Removed: ${removedNames.join(', ')}`);
+      }
+
       const updated = await ctx.prisma.quote.update({
         where: { id: input.id },
         data: {
@@ -331,6 +373,7 @@ export const quotesRouter = createTRPCRouter({
           create: {
             action: 'UPDATED',
             payload: {
+              changes,
               lines: lineCalculations.map((line) => ({
                   rateCardId: line.rateCardId,
                   lineTotalExVat: line.lineTotalExVat.toString()

@@ -294,11 +294,24 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
               }
               
               // Handle UPDATE action or other actions
-              if (entry.action === 'UPDATED' && payload.totals && typeof payload.totals === 'object') {
-                const totals = payload.totals as { total?: string | number };
+              if (entry.action === 'UPDATED') {
+                const changes = payload.changes as string[] | undefined;
+                const totals = payload.totals as { total?: string | number } | undefined;
+
                 return (
-                  <div className="mt-1 text-xs text-slate-500">
-                    <p>Total: {formatGBP(Number(totals.total))}</p>
+                  <div className="mt-1 space-y-1 text-xs text-slate-500">
+                    {changes && changes.length > 0 ? (
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {changes.map((change, idx) => (
+                          <li key={idx}>{change}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>Quote details updated</p>
+                    )}
+                    {totals && (
+                      <p className="font-medium text-slate-700">New total: {formatGBP(Number(totals.total))}</p>
+                    )}
                   </div>
                 );
               }
