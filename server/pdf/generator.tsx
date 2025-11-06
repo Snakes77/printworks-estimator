@@ -145,9 +145,14 @@ export const generateQuotePdfBuffer = async (
     };
 
     if (isProduction) {
-      // Production: use Chromium package settings
-      launchOptions.args = chromium.args;
+      // Production: use Chromium package settings for serverless environments
+      launchOptions.args = [
+        ...chromium.args,
+        '--disable-software-rasterizer',
+        '--disable-dev-shm-usage',
+      ];
       launchOptions.defaultViewport = chromium.defaultViewport;
+      launchOptions.headless = chromium.headless;
     } else {
       // Development: minimal args for local Chrome
       launchOptions.args = [
