@@ -68,7 +68,7 @@ export async function POST(
         payload: {
           to,
           emailId,
-          pdfUrl,
+          pdfUrl: printUrl,
           timestamp: new Date().toISOString(),
         },
       },
