@@ -67,10 +67,13 @@ export async function sendQuoteEmail(params: SendQuoteEmailParams): Promise<stri
             <div style="margin-bottom: 24px;">
               <p style="margin: 0 0 16px 0;">Dear ${params.clientName},</p>
               <p style="margin: 0 0 16px 0;">
-                Please find attached your quotation reference <strong>${params.quoteReference}</strong>.
+                Please find your quotation reference <strong>${params.quoteReference}</strong>.
               </p>
               <p style="margin: 0 0 16px 0;">
-                You can also view the PDF online: <a href="${params.pdfUrl}" style="color: ${BRAND_CONFIG.colors.primary}; text-decoration: underline;">View Quote PDF</a>
+                <a href="${params.pdfUrl}" style="color: ${BRAND_CONFIG.colors.primary}; text-decoration: underline; font-weight: 600;">View &amp; Print Your Quote →</a>
+              </p>
+              <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;">
+                Once the page loads, press <strong>Ctrl+P</strong> (Windows/Linux) or <strong>Cmd+P</strong> (Mac) to save as PDF.
               </p>
               <p style="margin: 0 0 16px 0;">
                 If you have any questions about this estimate, please don't hesitate to contact us.
