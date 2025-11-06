@@ -4,7 +4,6 @@ import Decimal from 'decimal.js';
 import { createTRPCRouter, protectedProcedure } from '@/server/api/trpc';
 import { calculateLine, calculateQuoteLines, calculateTotals } from '@/lib/pricing';
 import { ensurePrismaUser } from '@/lib/app-user';
-import { generateQuotePdfBuffer } from '@/server/pdf/generator';
 import { verifyQuoteOwnership } from '@/lib/auth';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
@@ -356,76 +355,28 @@ export const quotesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       try {
         const user = await ensurePrismaUser(ctx.user);
-        
-        // SECURITY: Rate limit PDF generation (expensive operation)
+
+        // SECURITY: Rate limit PDF generation
         await checkRateLimit(user.id, RATE_LIMITS.PDF_GENERATION);
-        
-        // SECURITY: Verify ownership before generating PDF
+
+        // SECURITY: Verify ownership before generating PDF URL
         await verifyQuoteOwnership(input.quoteId, user.id);
 
-        console.log('[tRPC] generatePdf: Starting PDF generation for quote:', input.quoteId);
-        const { pdf, totals } = await generateQuotePdfBuffer(input.quoteId, user.id, ctx.cookies);
-        console.log('[tRPC] generatePdf: PDF generated successfully, size:', pdf.length, 'bytes');
+        // Return print URL - browser will handle PDF generation
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
+        const printUrl = `${baseUrl}/quotes/${input.quoteId}/print`;
 
-        // SECURITY: Use service role client for storage operations
-        const serviceClient = createSupabaseServiceRoleClient();
-        const storage = serviceClient.storage.from('quotes');
-        const filePath = `${input.quoteId}.pdf`;
-        console.log('[tRPC] generatePdf: Uploading PDF to storage...');
-        const uploadResult = await storage.upload(filePath, pdf, {
-          contentType: 'application/pdf',
-          upsert: true
-        });
+        console.log('[tRPC] generatePdf: Returning print URL for browser-based PDF');
 
-        if (uploadResult.error) {
-          console.error('[tRPC] generatePdf: Storage upload error:', uploadResult.error);
-          throw uploadResult.error;
-        }
-
-        console.log('[tRPC] generatePdf: PDF uploaded successfully, generating signed URL...');
-        // SECURITY: Generate signed URL instead of public URL (5 minute expiry)
-        const {
-          data: signedUrlData
-        } = await storage.createSignedUrl(filePath, 300); // 5 minutes
-
-        if (!signedUrlData?.signedUrl) {
-          throw new Error('Failed to generate signed URL');
-        }
-
-        const signedUrl = signedUrlData.signedUrl;
-        console.log('[tRPC] generatePdf: Signed URL generated successfully');
-
-        await ctx.prisma.quote.update({
-          where: { id: input.quoteId },
-          data: {
-            pdfUrl: signedUrl,
-            history: {
-              create: {
-                action: 'PDF_GENERATED',
-                payload: {
-                  pdfUrl: signedUrl,
-                  totals
-                }
-              }
-            }
-          }
-        });
-
-        console.log('[tRPC] generatePdf: Quote updated with PDF URL');
-        return { pdfUrl: signedUrl, totals };
+        return {
+          printUrl,
+          pdfUrl: printUrl, // For compatibility
+          totals: { subtotal: 0, total: 0 } // Placeholder
+        };
       } catch (error) {
         console.error('[tRPC] generatePdf: Error occurred:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorStack = error instanceof Error ? error.stack : undefined;
-        console.error('[tRPC] generatePdf: Error details:', {
-          message: errorMessage,
-          stack: errorStack,
-          quoteId: input.quoteId,
-          userId: ctx.user?.id
-        });
-        
-        // Re-throw with more context
-        throw new Error(`PDF generation failed: ${errorMessage}`);
+        throw new Error(`Failed to generate PDF URL: ${errorMessage}`);
       }
     }),
   sendEmail: protectedProcedure

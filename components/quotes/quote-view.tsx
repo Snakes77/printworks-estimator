@@ -81,7 +81,26 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
   });
 
   const handleGeneratePdf = () => {
-    generatePdf.mutate({ quoteId: quote.id });
+    generatePdf.mutate({ quoteId: quote.id }, {
+      onSuccess: (data) => {
+        if (data.printUrl) {
+          // Open print page in new window
+          const printWindow = window.open(data.printUrl, '_blank');
+
+          if (printWindow) {
+            toast.success('Print page opened! Press Ctrl+P (Cmd+P on Mac) to save as PDF', {
+              duration: 5000
+            });
+          } else {
+            toast.error('Please allow pop-ups to open the print page');
+          }
+        }
+      },
+      onError: (error) => {
+        console.error('Print page error:', error);
+        toast.error('Failed to open print page');
+      }
+    });
   };
 
   const handleSendEmail = () => {
@@ -105,9 +124,12 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
           <Button variant="secondary" asChild>
             <Link href={`/quotes/${quote.id}/edit`}>Edit quote</Link>
           </Button>
-          <Button variant="secondary" onClick={handleGeneratePdf} disabled={generatePdf.isPending}>
-            {generatePdf.isPending ? 'Generating…' : 'Generate PDF'}
-          </Button>
+          <div className="flex flex-col items-center gap-1">
+            <Button variant="secondary" onClick={handleGeneratePdf} disabled={generatePdf.isPending}>
+              {generatePdf.isPending ? 'Opening...' : 'Open Print View'}
+            </Button>
+            <p className="text-xs text-slate-500">Ctrl+P (Cmd+P) to save as PDF</p>
+          </div>
           <Button 
             variant="primary" 
             onClick={() => setEmailOpen(!emailOpen)} 
