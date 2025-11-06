@@ -44,6 +44,8 @@ type QuoteViewProps = {
     history: QuoteHistoryEntry[];
     totals: {
       subtotal: number;
+      discount?: number;
+      discountPercentage?: number;
       total: number;
     };
   };
@@ -210,9 +212,21 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
             <CardTitle>Totals</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="flex items-center justify-between text-base font-semibold text-slate-900">
-              <span>Total</span>
-              <span>{formatGBP(quote.totals.total)}</span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Subtotal</span>
+                <span className="font-mono">{formatGBP(quote.totals.subtotal)}</span>
+              </div>
+              {(quote.totals.discount ?? 0) > 0 && (
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Discount ({quote.totals.discountPercentage ?? 0}%)</span>
+                  <span className="font-mono text-red-600">-{formatGBP(quote.totals.discount ?? 0)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-lg font-bold text-slate-900 border-t border-slate-200 pt-2">
+                <span>Total</span>
+                <span className="font-mono">{formatGBP(quote.totals.total)}</span>
+              </div>
             </div>
           </CardContent>
           <CardFooter>

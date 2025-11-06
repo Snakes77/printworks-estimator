@@ -52,7 +52,8 @@ export default async function PrintPage({ params }: { params?: Promise<{ id: str
       makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
       unitsInThousands: new Decimal(line.unitsInThousands.toString()),
       lineTotalExVat: new Decimal(line.lineTotalExVat.toString()),
-    }))
+    })),
+    Number(quote.discountPercentage)
   );
 
   return (
@@ -343,6 +344,12 @@ export default async function PrintPage({ params }: { params?: Promise<{ id: str
                 <span className="total-label">Net Amount (GBP)</span>
                 <span className="total-amount">{formatGBP(totals.subtotal)}</span>
               </div>
+              {totals.discount.toNumber() > 0 && (
+                <div className="total-row">
+                  <span className="total-label">Discount ({totals.discountPercentage.toNumber()}%)</span>
+                  <span className="total-amount" style={{ color: '#dc2626' }}>-{formatGBP(totals.discount)}</span>
+                </div>
+              )}
               <div className="total-row grand">
                 <span className="total-label">Grand Total (GBP)</span>
                 <span className="total-amount">{formatGBP(totals.total)}</span>
