@@ -145,12 +145,10 @@ export const generateQuotePdfBuffer = async (
     };
 
     if (isProduction) {
-      // Production: use Chromium package settings for serverless environments
-      launchOptions.args = [
-        ...chromium.args,
-        '--disable-software-rasterizer',
-        '--disable-dev-shm-usage',
-      ];
+      // CRITICAL: Use chromium.args directly - do NOT modify them
+      // @sparticuz/chromium configures library paths and other required settings
+      console.log('[PDF] Using @sparticuz/chromium configuration for Vercel');
+      launchOptions.args = chromium.args;
       launchOptions.defaultViewport = chromium.defaultViewport;
       launchOptions.headless = chromium.headless;
     } else {
@@ -278,6 +276,8 @@ export const generateQuotePdfBuffer = async (
     
     if (errorMessage.includes('spawn') || errorMessage.includes('ENOENT') || errorMessage.includes('Unknown system error')) {
       userFriendlyMessage = 'Chrome/Chromium not found. For local development, set CHROME_EXECUTABLE_PATH environment variable or install Chrome.';
+    } else if (errorMessage.includes('libnss3') || errorMessage.includes('shared libraries')) {
+      userFriendlyMessage = 'Chromium libraries missing. This should be handled by @sparticuz/chromium. Please check Vercel configuration.';
     } else if (errorMessage.includes('timeout')) {
       userFriendlyMessage = 'PDF generation timed out. The quote page may be taking too long to load.';
     } else if (errorMessage.includes('navigation')) {
