@@ -8,6 +8,7 @@ import { verifyQuoteOwnership } from '@/lib/auth';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { sendQuoteEmail } from '@/lib/email';
+import { generatePdfFromUrl, isPdfCoConfigured } from '@/lib/pdf/pdfco';
 
 const serialiseLine = (line: {
   id: string;
@@ -403,18 +404,37 @@ export const quotesRouter = createTRPCRouter({
           throw new Error('Quote not found');
         }
 
-        // Use print URL instead of generating PDF
+        // Generate PDF using PDF.co
         const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
         const printUrl = `${baseUrl}/quotes/${input.quoteId}/print`;
 
-        // Send email with print URL
+        let pdfBuffer: Buffer | undefined;
+
+        if (isPdfCoConfigured()) {
+          try {
+            console.log('[tRPC] sendEmail: Generating PDF via PDF.co...');
+            pdfBuffer = await generatePdfFromUrl({
+              url: printUrl,
+              fileName: `quote-${quote.reference}.pdf`,
+            });
+            console.log('[tRPC] sendEmail: PDF generated successfully, size:', pdfBuffer.length);
+          } catch (pdfError) {
+            console.error('[tRPC] sendEmail: PDF generation failed:', pdfError);
+            // Continue without PDF attachment - send link only
+            pdfBuffer = undefined;
+          }
+        } else {
+          console.log('[tRPC] sendEmail: PDF.co not configured, sending link only');
+        }
+
+        // Send email with PDF attachment or link
         console.log('[tRPC] sendEmail: Sending email to:', input.to);
         const emailId = await sendQuoteEmail({
           to: input.to,
           quoteReference: quote.reference,
           clientName: quote.clientName,
           pdfUrl: printUrl,
-          // No PDF buffer - user will print from browser
+          pdfBuffer,
         });
 
         if (!emailId) {
