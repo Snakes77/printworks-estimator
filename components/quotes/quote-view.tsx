@@ -271,18 +271,20 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
               }
               
               // Handle PDF_GENERATED action
-              if (entry.action === 'PDF_GENERATED' && payload.totals && typeof payload.totals === 'object') {
-                const totals = payload.totals as { total?: string | number };
+              if (entry.action === 'PDF_GENERATED') {
                 const pdfUrl = payload.pdfUrl ? String(payload.pdfUrl) : null;
+                const fileSize = payload.fileSize ? Number(payload.fileSize) : null;
+                const fileSizeKB = fileSize ? Math.round(fileSize / 1024) : null;
+
                 return (
                   <div className="mt-1 space-y-0.5 text-xs text-slate-500">
-                    <p>PDF generated • Total: {formatGBP(Number(totals.total))}</p>
+                    {fileSizeKB && <p>File size: {fileSizeKB} KB</p>}
                     {pdfUrl && (
                       <a
                         href={pdfUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
+                        className="text-blue-600 hover:underline font-medium"
                       >
                         View PDF →
                       </a>
