@@ -110,6 +110,9 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
   const quantity = form.watch('quantity');
   const insertsCount = form.watch('insertsCount');
 
+  // Preview for currently selected (but not yet added) rate card
+  const selectedCardPreview = trpc.quotes.preview.useMutation();
+
   useEffect(() => {
     if (!selectedRateCardIds.length) {
       return;
@@ -122,6 +125,20 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRateCardIds, quantity, insertsCount]);
+
+  // Live preview when a card is selected in dropdown
+  useEffect(() => {
+    if (!selectedCardId) {
+      return;
+    }
+
+    const values = form.getValues();
+    selectedCardPreview.mutate({
+      ...values,
+      lines: [{ rateCardId: selectedCardId }]
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCardId, quantity, insertsCount]);
 
   const availableCards = useMemo(
     () => rateCards.filter((card) => !selectedRateCardIds.includes(card.id)),
@@ -327,6 +344,30 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
                 Add operation
               </Button>
             </div>
+            {selectedCardId && selectedCardPreview.data && (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">UNITS (K)</p>
+                    <p className="mt-0.5 font-mono text-slate-900">
+                      {selectedCardPreview.data.lines[0]?.unitsInThousands.toFixed(3) ?? '0.000'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">UNIT £/1K</p>
+                    <p className="mt-0.5 font-mono text-slate-900">
+                      {formatGBP(selectedCardPreview.data.lines[0]?.unitPricePerThousand ?? 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">MAKE-READY</p>
+                    <p className="mt-0.5 font-mono text-slate-900">
+                      {formatGBP(selectedCardPreview.data.lines[0]?.makeReadyFixed ?? 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
