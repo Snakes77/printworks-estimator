@@ -196,10 +196,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         accessorKey: 'description',
         header: 'Operation',
         cell: ({ row }) => (
-          <div>
-            <p className="font-medium text-slate-900">{row.original.description}</p>
-            <p className="text-xs uppercase tracking-wide text-slate-500">{row.original.code}</p>
-          </div>
+          <p className="font-medium text-slate-900">{row.original.description}</p>
         )
       },
       {
