@@ -431,7 +431,7 @@ export const quotesRouter = createTRPCRouter({
                 payload: {
                   to: input.to,
                   emailId,
-                  pdfUrl
+                  pdfUrl: printUrl
                 }
               }
             }
