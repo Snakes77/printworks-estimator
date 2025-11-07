@@ -331,10 +331,7 @@ export const RateCardManager = () => {
                 {sortedRateCards.map((card) => (
                   <TableRow key={card.id} className="cursor-pointer hover:bg-slate-50" onClick={() => openEditor(card as unknown as RateCard)}>
                     <TableCell>
-                      <div className="space-y-0.5">
-                        <p className="font-medium text-slate-900">{card.name}</p>
-                        <p className="text-xs text-slate-500">{card.code}</p>
-                      </div>
+                      <p className="font-medium text-slate-900">{card.name}</p>
                     </TableCell>
                     <TableCell className="text-slate-600 capitalize">
                       {card.unit === 'per_1k' ? 'Per 1,000' : card.unit === 'enclose' ? 'Enclose' : 'Per job'}
