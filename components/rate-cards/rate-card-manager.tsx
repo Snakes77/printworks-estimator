@@ -316,47 +316,57 @@ export const RateCardManager = () => {
             Add rate card
           </Button>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>Bands</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedRateCards.map((card) => (
-                <TableRow key={card.id} className="cursor-pointer" onClick={() => openEditor(card as unknown as RateCard)}>
-                  <TableCell className="font-medium">{card.code}</TableCell>
-                  <TableCell>{card.name}</TableCell>
-                  <TableCell>{card.unit}</TableCell>
-                  <TableCell>{card.bands.length}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      className="px-3 py-1 text-xs"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openEditor(card as unknown as RateCard);
-                      }}
-                    >
-                      Manage
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {sortedRateCards.length === 0 && (
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="py-6 text-center text-sm text-slate-500">
-                    No rate cards yet.
-                  </TableCell>
+                  <TableHead className="w-[200px]">Name</TableHead>
+                  <TableHead className="w-[140px]">Unit</TableHead>
+                  <TableHead className="w-[100px]">Bands</TableHead>
+                  <TableHead className="w-[100px]"></TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sortedRateCards.map((card) => (
+                  <TableRow key={card.id} className="cursor-pointer hover:bg-slate-50" onClick={() => openEditor(card as unknown as RateCard)}>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="font-medium text-slate-900">{card.name}</p>
+                        <p className="text-xs text-slate-500">{card.code}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-slate-600 capitalize">
+                      {card.unit === 'per_1k' ? 'Per 1,000' : card.unit === 'enclose' ? 'Enclose' : 'Per job'}
+                    </TableCell>
+                    <TableCell className="text-slate-600">{card.bands.length}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        className="px-3 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEditor(card as unknown as RateCard);
+                        }}
+                      >
+                        Manage
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {sortedRateCards.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-12 text-center">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-slate-900">No rate cards yet</p>
+                        <p className="text-xs text-slate-500">Get started by adding your first rate card</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
