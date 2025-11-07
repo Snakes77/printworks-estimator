@@ -37,8 +37,11 @@ const serialiseTotals = (totals: ReturnType<typeof calculateTotals>) => ({
 });
 
 const lineSelectionSchema = z.object({
-  rateCardId: z.string(),
-  description: z.string().optional()
+  rateCardId: z.string().optional(),
+  description: z.string().optional(),
+  // For custom/bespoke line items
+  customDescription: z.string().optional(),
+  customPrice: z.number().optional()
 });
 
 const quotePayloadSchema = z.object({
@@ -165,12 +168,15 @@ export const quotesRouter = createTRPCRouter({
     };
   }),
   preview: protectedProcedure.input(quotePayloadSchema).mutation(async ({ ctx, input }) => {
+    const rateCardLines = input.lines.filter(line => line.rateCardId);
+    const customLines = input.lines.filter(line => line.customDescription);
+
     const rateCards = await ctx.prisma.rateCard.findMany({
-      where: { id: { in: input.lines.map((line) => line.rateCardId) } },
+      where: { id: { in: rateCardLines.map((line) => line.rateCardId!) } },
       include: { bands: { orderBy: { fromQty: 'asc' } } }
     });
 
-    const orderedCards = input.lines.map((line) => {
+    const orderedCards = rateCardLines.map((line) => {
       const card = rateCards.find((rc) => rc.id === line.rateCardId);
       if (!card) {
         throw new Error(`Rate card ${line.rateCardId} not found`);
@@ -178,11 +184,25 @@ export const quotesRouter = createTRPCRouter({
       return card;
     });
 
-    const lines = calculateQuoteLines(input.quantity, input.insertsCount, orderedCards);
-    const totals = calculateTotals(lines, input.discountPercentage);
+    const calculatedLines = calculateQuoteLines(input.quantity, input.insertsCount, orderedCards);
+
+    // Add custom lines
+    const allLines = [
+      ...calculatedLines,
+      ...customLines.map(line => ({
+        rateCardId: 'custom',
+        description: line.customDescription!,
+        unitPricePerThousand: new Decimal(0),
+        makeReadyFixed: new Decimal(0),
+        unitsInThousands: new Decimal(0),
+        lineTotalExVat: new Decimal(line.customPrice ?? 0)
+      }))
+    ];
+
+    const totals = calculateTotals(allLines, input.discountPercentage);
 
     return {
-      lines: lines.map((line) => ({
+      lines: allLines.map((line) => ({
         rateCardId: line.rateCardId,
         description: line.description,
         unitPricePerThousand: line.unitPricePerThousand.toNumber(),
@@ -195,16 +215,19 @@ export const quotesRouter = createTRPCRouter({
   }),
   create: protectedProcedure.input(quotePayloadSchema).mutation(async ({ ctx, input }) => {
     const user = await ensurePrismaUser(ctx.user);
-    
+
     // SECURITY: Rate limit quote creation
     await checkRateLimit(user.id, RATE_LIMITS.QUOTE_CREATE);
 
+    const rateCardLines = input.lines.filter(line => line.rateCardId);
+    const customLines = input.lines.filter(line => line.customDescription);
+
     const rateCards = await ctx.prisma.rateCard.findMany({
-      where: { id: { in: input.lines.map((line) => line.rateCardId) } },
+      where: { id: { in: rateCardLines.map((line) => line.rateCardId!) } },
       include: { bands: { orderBy: { fromQty: 'asc' } } }
     });
 
-    const orderedCards = input.lines.map((line) => {
+    const orderedCards = rateCardLines.map((line) => {
       const card = rateCards.find((rc) => rc.id === line.rateCardId);
       if (!card) {
         throw new Error(`Rate card ${line.rateCardId} not found`);
@@ -222,7 +245,18 @@ export const quotesRouter = createTRPCRouter({
       return calculateLine(card, band, input.quantity, input.insertsCount);
     });
 
-    const totals = calculateTotals(lineCalculations, input.discountPercentage);
+    // Add custom lines
+    const customLineCalculations = customLines.map(line => ({
+      rateCardId: 'custom',
+      description: line.customDescription!,
+      unitPricePerThousand: new Decimal(0),
+      makeReadyFixed: new Decimal(0),
+      unitsInThousands: new Decimal(0),
+      lineTotalExVat: new Decimal(line.customPrice ?? 0)
+    }));
+
+    const allLineCalculations = [...lineCalculations, ...customLineCalculations];
+    const totals = calculateTotals(allLineCalculations, input.discountPercentage);
 
     const quote = await ctx.prisma.quote.create({
       data: {
@@ -236,7 +270,7 @@ export const quotesRouter = createTRPCRouter({
         insertsCount: input.insertsCount,
         vatRate: new Prisma.Decimal(0), // Quotes don't include VAT, set to 0 for backward compatibility
         lines: {
-          create: lineCalculations.map((line) => ({
+          create: allLineCalculations.map((line) => ({
             rateCardId: line.rateCardId,
             description: line.description,
             unitPricePerThousand: new Prisma.Decimal(line.unitPricePerThousand.toString()),
@@ -249,7 +283,7 @@ export const quotesRouter = createTRPCRouter({
           create: {
             action: 'CREATED',
             payload: {
-              lines: lineCalculations.map((line) => ({
+              lines: allLineCalculations.map((line) => ({
                 rateCardId: line.rateCardId,
                 lineTotalExVat: line.lineTotalExVat.toString()
               })),
@@ -288,12 +322,15 @@ export const quotesRouter = createTRPCRouter({
 
       await ctx.prisma.quoteLine.deleteMany({ where: { quoteId: existing.id } });
 
+      const rateCardLines = input.lines.filter(line => line.rateCardId);
+      const customLines = input.lines.filter(line => line.customDescription);
+
       const rateCards = await ctx.prisma.rateCard.findMany({
-        where: { id: { in: input.lines.map((line) => line.rateCardId) } },
+        where: { id: { in: rateCardLines.map((line) => line.rateCardId!) } },
         include: { bands: { orderBy: { fromQty: 'asc' } } }
       });
 
-      const orderedCards = input.lines.map((line) => {
+      const orderedCards = rateCardLines.map((line) => {
         const card = rateCards.find((rc) => rc.id === line.rateCardId);
         if (!card) {
           throw new Error(`Rate card ${line.rateCardId} not found`);
@@ -311,7 +348,18 @@ export const quotesRouter = createTRPCRouter({
         return calculateLine(card, band, input.quantity, input.insertsCount);
       });
 
-      const totals = calculateTotals(lineCalculations, input.discountPercentage);
+      // Add custom lines
+      const customLineCalculations = customLines.map(line => ({
+        rateCardId: 'custom',
+        description: line.customDescription!,
+        unitPricePerThousand: new Decimal(0),
+        makeReadyFixed: new Decimal(0),
+        unitsInThousands: new Decimal(0),
+        lineTotalExVat: new Decimal(line.customPrice ?? 0)
+      }));
+
+      const allLineCalculations = [...lineCalculations, ...customLineCalculations];
+      const totals = calculateTotals(allLineCalculations, input.discountPercentage);
 
       // Track what changed for history
       const changes: string[] = [];
@@ -336,8 +384,8 @@ export const quotesRouter = createTRPCRouter({
       }
 
       // Track line changes
-      const existingLineIds = existing.lines.map(l => l.rateCardId).sort();
-      const newLineIds = input.lines.map(l => l.rateCardId).sort();
+      const existingLineIds = existing.lines.map(l => l.rateCardId).filter(Boolean).sort();
+      const newLineIds = input.lines.map(l => l.rateCardId).filter((id): id is string => Boolean(id)).sort();
 
       const addedLines = newLineIds.filter(id => !existingLineIds.includes(id));
       const removedLines = existingLineIds.filter(id => !newLineIds.includes(id));
@@ -370,7 +418,7 @@ export const quotesRouter = createTRPCRouter({
           discountPercentage: new Prisma.Decimal(input.discountPercentage.toString()),
           vatRate: new Prisma.Decimal(0), // Quotes don't include VAT, set to 0 for backward compatibility
           lines: {
-            create: lineCalculations.map((line) => ({
+            create: allLineCalculations.map((line) => ({
               rateCardId: line.rateCardId,
               description: line.description,
               unitPricePerThousand: new Prisma.Decimal(line.unitPricePerThousand.toString()),
@@ -384,7 +432,7 @@ export const quotesRouter = createTRPCRouter({
             action: 'UPDATED',
             payload: {
               changes,
-              lines: lineCalculations.map((line) => ({
+              lines: allLineCalculations.map((line) => ({
                   rateCardId: line.rateCardId,
                   lineTotalExVat: line.lineTotalExVat.toString()
                 })),

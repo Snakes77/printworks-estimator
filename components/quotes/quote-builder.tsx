@@ -79,12 +79,32 @@ type QuoteBuilderProps = {
   existingQuote?: ExistingQuote;
 };
 
+type CustomLine = {
+  id: string;
+  customDescription: string;
+  customPrice: number;
+};
+
 export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) => {
   const router = useRouter();
   const [selectedRateCardIds, setSelectedRateCardIds] = useState<string[]>(
-    existingQuote ? existingQuote.lines.map((line) => line.rateCardId) : []
+    existingQuote ? existingQuote.lines.filter(line => line.rateCardId !== 'custom').map((line) => line.rateCardId) : []
+  );
+  const [customLines, setCustomLines] = useState<CustomLine[]>(
+    existingQuote
+      ? existingQuote.lines
+          .filter(line => line.rateCardId === 'custom')
+          .map(line => ({
+            id: line.rateCardId + Math.random(),
+            customDescription: line.description,
+            customPrice: line.lineTotalExVat
+          }))
+      : []
   );
   const [selectedCardId, setSelectedCardId] = useState('');
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customDescription, setCustomDescription] = useState('');
+  const [customPrice, setCustomPrice] = useState('');
   const preview = trpc.quotes.preview.useMutation();
   const createQuote = trpc.quotes.create.useMutation();
   const updateQuote = trpc.quotes.update.useMutation();
@@ -121,17 +141,20 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
   const selectedCardPreview = trpc.quotes.preview.useMutation();
 
   useEffect(() => {
-    if (!selectedRateCardIds.length) {
+    if (!selectedRateCardIds.length && !customLines.length) {
       return;
     }
 
     const values = form.getValues();
     preview.mutate({
       ...values,
-      lines: selectedRateCardIds.map((id) => ({ rateCardId: id }))
+      lines: [
+        ...selectedRateCardIds.map((id) => ({ rateCardId: id })),
+        ...customLines.map((line) => ({ customDescription: line.customDescription, customPrice: line.customPrice }))
+      ]
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRateCardIds, quantity, insertsCount, discountPercentage]);
+  }, [selectedRateCardIds, customLines, quantity, insertsCount, discountPercentage]);
 
   // Live preview when a card is selected in dropdown
   useEffect(() => {
@@ -158,34 +181,56 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
   );
 
   const lineRows: LineRow[] = useMemo(() => {
-    if (!preview.data) {
-      return selectedCards.map((card) => {
-        const existing = existingQuote?.lines.find((line) => line.rateCardId === card.id);
-        return {
-          rateCardId: card.id,
-          description: card.name,
-          unitPricePerThousand: existing?.unitPricePerThousand ?? 0,
-          makeReadyFixed: existing?.makeReadyFixed ?? 0,
-          unitsInThousands: existing?.unitsInThousands ?? 0,
-          lineTotalExVat: existing?.lineTotalExVat ?? 0,
-          code: card.code
-        };
-      });
-    }
+    const rateCardRows = preview.data
+      ? selectedCards.map((card) => {
+          const line = preview.data?.lines.find((item) => item.rateCardId === card.id);
+          return {
+            rateCardId: card.id,
+            description: card.name,
+            unitPricePerThousand: line?.unitPricePerThousand ?? 0,
+            makeReadyFixed: line?.makeReadyFixed ?? 0,
+            unitsInThousands: line?.unitsInThousands ?? 0,
+            lineTotalExVat: line?.lineTotalExVat ?? 0,
+            code: card.code
+          };
+        })
+      : selectedCards.map((card) => {
+          const existing = existingQuote?.lines.find((line) => line.rateCardId === card.id);
+          return {
+            rateCardId: card.id,
+            description: card.name,
+            unitPricePerThousand: existing?.unitPricePerThousand ?? 0,
+            makeReadyFixed: existing?.makeReadyFixed ?? 0,
+            unitsInThousands: existing?.unitsInThousands ?? 0,
+            lineTotalExVat: existing?.lineTotalExVat ?? 0,
+            code: card.code
+          };
+        });
 
-    return selectedCards.map((card) => {
-      const line = preview.data?.lines.find((item) => item.rateCardId === card.id);
-      return {
-        rateCardId: card.id,
-        description: card.name,
-        unitPricePerThousand: line?.unitPricePerThousand ?? 0,
-        makeReadyFixed: line?.makeReadyFixed ?? 0,
-        unitsInThousands: line?.unitsInThousands ?? 0,
-        lineTotalExVat: line?.lineTotalExVat ?? 0,
-        code: card.code
-      };
-    });
-  }, [selectedCards, preview.data, existingQuote]);
+    const customRows = preview.data
+      ? preview.data.lines
+          .filter((item) => item.rateCardId === 'custom')
+          .map((line) => ({
+            rateCardId: 'custom',
+            description: line.description,
+            unitPricePerThousand: 0,
+            makeReadyFixed: 0,
+            unitsInThousands: 0,
+            lineTotalExVat: line.lineTotalExVat,
+            code: 'CUSTOM'
+          }))
+      : customLines.map((line) => ({
+          rateCardId: 'custom',
+          description: line.customDescription,
+          unitPricePerThousand: 0,
+          makeReadyFixed: 0,
+          unitsInThousands: 0,
+          lineTotalExVat: line.customPrice,
+          code: 'CUSTOM'
+        }));
+
+    return [...rateCardRows, ...customRows];
+  }, [selectedCards, customLines, preview.data, existingQuote]);
 
   const totals = preview.data?.totals ?? existingQuote?.totals ?? { subtotal: 0, total: 0 };
   const isEditing = Boolean(existingQuote);
@@ -226,16 +271,25 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           <Button
             variant="ghost"
             className="text-xs text-red-600"
-            onClick={() =>
-              setSelectedRateCardIds((current) => current.filter((id) => id !== row.original.rateCardId))
-            }
+            onClick={() => {
+              if (row.original.rateCardId === 'custom') {
+                const customLine = customLines.find(
+                  (line) => line.customDescription === row.original.description
+                );
+                if (customLine) {
+                  removeCustomLine(customLine.id);
+                }
+              } else {
+                setSelectedRateCardIds((current) => current.filter((id) => id !== row.original.rateCardId));
+              }
+            }}
           >
             Remove
           </Button>
         )
       }
     ],
-    []
+    [customLines]
   );
 
   const table = useReactTable({
@@ -250,16 +304,38 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
     setSelectedCardId('');
   };
 
+  const addCustomLine = () => {
+    if (!customDescription || !customPrice) {
+      toast.error('Please enter both description and price for the custom item.');
+      return;
+    }
+    setCustomLines((current) => [...current, {
+      id: Math.random().toString(),
+      customDescription,
+      customPrice: parseFloat(customPrice)
+    }]);
+    setCustomDescription('');
+    setCustomPrice('');
+    setShowCustomForm(false);
+  };
+
+  const removeCustomLine = (id: string) => {
+    setCustomLines((current) => current.filter((line) => line.id !== id));
+  };
+
   const onSubmit = form.handleSubmit(async (values, event) => {
-    if (!selectedRateCardIds.length) {
-      toast.error('Add at least one operation to build a quote.');
+    if (!selectedRateCardIds.length && !customLines.length) {
+      toast.error('Add at least one operation or custom item to build a quote.');
       return;
     }
 
     try {
       const payload = {
         ...values,
-        lines: selectedRateCardIds.map((id) => ({ rateCardId: id }))
+        lines: [
+          ...selectedRateCardIds.map((id) => ({ rateCardId: id })),
+          ...customLines.map((line) => ({ customDescription: line.customDescription, customPrice: line.customPrice }))
+        ]
       };
 
       const result = isEditing
@@ -347,7 +423,47 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
               <Button type="button" variant="secondary" onClick={addRateCard} disabled={!selectedCardId}>
                 Add operation
               </Button>
+              <Button type="button" variant="ghost" onClick={() => setShowCustomForm(!showCustomForm)}>
+                + Custom item
+              </Button>
             </div>
+            {showCustomForm && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-slate-900">Add bespoke line item</h4>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="customDescription" className="text-xs">Description</Label>
+                    <Input
+                      id="customDescription"
+                      value={customDescription}
+                      onChange={(e) => setCustomDescription(e.target.value)}
+                      placeholder="e.g., Custom die cutting"
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customPrice" className="text-xs">Price (£)</Label>
+                    <Input
+                      id="customPrice"
+                      type="number"
+                      step="0.01"
+                      value={customPrice}
+                      onChange={(e) => setCustomPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="bg-white"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" onClick={addCustomLine} className="text-xs">
+                    Add to quote
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowCustomForm(false)} className="text-xs">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
             {selectedCardId && selectedCardPreview.data && (
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="grid grid-cols-3 gap-3 text-sm">
