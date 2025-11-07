@@ -4,7 +4,7 @@ import Decimal from 'decimal.js';
 import { createTRPCRouter, protectedProcedure } from '@/server/api/trpc';
 import { calculateLine, calculateQuoteLines, calculateTotals } from '@/lib/pricing';
 import { ensurePrismaUser } from '@/lib/app-user';
-import { verifyQuoteOwnership } from '@/lib/auth';
+// Removed verifyQuoteOwnership - shared team access model
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { sendQuoteEmail } from '@/lib/email';
@@ -66,9 +66,8 @@ export const quotesRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const user = await ensurePrismaUser(ctx.user);
-      // SECURITY: Always scope queries to current user
+      // Shared access: All team members can see all quotes
       const where = {
-        userId: user.id, // CRITICAL: User can only see their own quotes
         ...(input?.search
           ? {
               OR: [
@@ -117,9 +116,8 @@ export const quotesRouter = createTRPCRouter({
     }),
   get: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     const user = await ensurePrismaUser(ctx.user);
-    
-    // SECURITY: Verify ownership before returning quote
-    await verifyQuoteOwnership(input.id, user.id);
+
+    // Shared access: Any team member can view any quote
 
     const quote = await ctx.prisma.quote.findUnique({
       where: { id: input.id },
@@ -307,9 +305,8 @@ export const quotesRouter = createTRPCRouter({
     .input(quotePayloadSchema.extend({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const user = await ensurePrismaUser(ctx.user);
-      
-      // SECURITY: Verify ownership before allowing update
-      await verifyQuoteOwnership(input.id, user.id);
+
+      // Shared access: Any team member can update any quote
 
       const existing = await ctx.prisma.quote.findUnique({
         where: { id: input.id },
@@ -458,11 +455,10 @@ export const quotesRouter = createTRPCRouter({
       try {
         const user = await ensurePrismaUser(ctx.user);
 
-        // SECURITY: Rate limit PDF generation
+        // Rate limit PDF generation
         await checkRateLimit(user.id, RATE_LIMITS.PDF_GENERATION);
 
-        // SECURITY: Verify ownership before generating PDF
-        await verifyQuoteOwnership(input.quoteId, user.id);
+        // Shared access: Any team member can generate PDFs for any quote
 
         // Get quote details
         const quote = await ctx.prisma.quote.findUnique({
@@ -551,8 +547,7 @@ export const quotesRouter = createTRPCRouter({
       try {
         const user = await ensurePrismaUser(ctx.user);
 
-        // SECURITY: Verify ownership before sending email
-        await verifyQuoteOwnership(input.quoteId, user.id);
+        // Shared access: Any team member can send emails for any quote
 
         // Get quote details
         const quote = await ctx.prisma.quote.findUnique({
