@@ -21,8 +21,6 @@ const quoteSchema = z.object({
   projectName: z.string().min(1, 'Project name is required'),
   reference: z.string().min(1, 'Reference is required'),
   quantity: z.coerce.number().int().positive('Quantity must be a whole number'),
-  envelopeType: z.string().min(1),
-  insertsCount: z.coerce.number().int().min(0),
   discountPercentage: z.coerce.number().min(0).max(100)
 });
 
@@ -34,6 +32,7 @@ type RateCard = {
   name: string;
   unit: string;
   notes?: string | null;
+  category?: string | null;
   bands: {
     id: string;
     fromQty: number;
@@ -58,8 +57,6 @@ type ExistingQuote = {
   projectName: string;
   reference: string;
   quantity: number;
-  envelopeType: string;
-  insertsCount: number;
   discountPercentage?: number;
   lines: PreviewLine[];
   totals: {
@@ -71,8 +68,6 @@ type ExistingQuote = {
 };
 
 type LineRow = PreviewLine & { code: string };
-
-const envelopeOptions = ['C5', 'C4', 'DL'];
 
 type QuoteBuilderProps = {
   rateCards: RateCard[];
@@ -118,8 +113,6 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           projectName: existingQuote.projectName,
           reference: existingQuote.reference,
           quantity: existingQuote.quantity,
-          envelopeType: existingQuote.envelopeType,
-          insertsCount: existingQuote.insertsCount,
           discountPercentage: existingQuote.discountPercentage ?? 0
         }
       : {
@@ -127,14 +120,11 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           projectName: '',
           reference: '',
           quantity: 20000,
-          envelopeType: 'C5',
-          insertsCount: 1,
           discountPercentage: 0
         }
   });
 
   const quantity = form.watch('quantity');
-  const insertsCount = form.watch('insertsCount');
   const discountPercentage = form.watch('discountPercentage');
 
   // Preview for currently selected (but not yet added) rate card
@@ -154,7 +144,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       ]
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRateCardIds, customLines, quantity, insertsCount, discountPercentage]);
+  }, [selectedRateCardIds, customLines, quantity, discountPercentage]);
 
   // Live preview when a card is selected in dropdown
   useEffect(() => {
@@ -168,7 +158,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       lines: [{ rateCardId: selectedCardId }]
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCardId, quantity, insertsCount, discountPercentage]);
+  }, [selectedCardId, quantity, discountPercentage]);
 
   const availableCards = useMemo(
     () => rateCards.filter((card) => !selectedRateCardIds.includes(card.id)),
@@ -179,6 +169,15 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
     () => selectedRateCardIds.map((id) => rateCards.find((card) => card.id === id)!).filter(Boolean),
     [selectedRateCardIds, rateCards]
   );
+
+  // Group rate cards by category
+  const rateCardsByCategory = useMemo(() => {
+    const categories = ['DATA_PROCESSING', 'PERSONALISATION', 'FINISHING', 'ENCLOSING'] as const;
+    return categories.reduce((acc, category) => {
+      acc[category] = availableCards.filter(card => card.category === category);
+      return acc;
+    }, {} as Record<string, RateCard[]>);
+  }, [availableCards]);
 
   const lineRows: LineRow[] = useMemo(() => {
     const rateCardRows = preview.data
@@ -377,29 +376,9 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
               <Label htmlFor="reference">Reference</Label>
               <Input id="reference" placeholder="Qtest1" {...form.register('reference')} />
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input id="quantity" type="number" min={1} {...form.register('quantity', { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="envelopeType">Envelope</Label>
-                <Select
-                  id="envelopeType"
-                  value={form.watch('envelopeType')}
-                  onChange={(event) => form.setValue('envelopeType', event.target.value)}
-                >
-                  {envelopeOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
             <div className="space-y-2">
-              <Label htmlFor="insertsCount">Inserts</Label>
-              <Input id="insertsCount" type="number" min={0} {...form.register('insertsCount', { valueAsNumber: true })} />
+              <Label htmlFor="quantity">Quantity</Label>
+              <Input id="quantity" type="number" min={1} {...form.register('quantity', { valueAsNumber: true })} />
             </div>
           </CardContent>
         </Card>
@@ -411,21 +390,101 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
             <CardTitle>Line items</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 md:flex-row">
-              <Select value={selectedCardId} onChange={(event) => setSelectedCardId(event.target.value)}>
-                <option value="">Select operation</option>
-                {availableCards.map((card) => (
-                  <option key={card.id} value={card.id}>
-                    {card.name}
-                  </option>
-                ))}
-              </Select>
-              <Button type="button" variant="secondary" onClick={addRateCard} disabled={!selectedCardId}>
-                Add operation
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setShowCustomForm(!showCustomForm)}>
-                + Custom item
-              </Button>
+            <div className="space-y-4">
+              {/* Data Processing Category */}
+              {rateCardsByCategory.DATA_PROCESSING?.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-slate-700">Data Processing</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={selectedCardId}
+                      onChange={(event) => setSelectedCardId(event.target.value)}
+                      className="flex-1"
+                    >
+                      <option value="">Select operation</option>
+                      {rateCardsByCategory.DATA_PROCESSING.map((card) => (
+                        <option key={card.id} value={card.id}>{card.name}</option>
+                      ))}
+                    </Select>
+                    <Button type="button" variant="secondary" onClick={addRateCard} disabled={!selectedCardId}>
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Personalisation Category */}
+              {rateCardsByCategory.PERSONALISATION?.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-slate-700">Personalisation</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={selectedCardId}
+                      onChange={(event) => setSelectedCardId(event.target.value)}
+                      className="flex-1"
+                    >
+                      <option value="">Select operation</option>
+                      {rateCardsByCategory.PERSONALISATION.map((card) => (
+                        <option key={card.id} value={card.id}>{card.name}</option>
+                      ))}
+                    </Select>
+                    <Button type="button" variant="secondary" onClick={addRateCard} disabled={!selectedCardId}>
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Finishing Category */}
+              {rateCardsByCategory.FINISHING?.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-slate-700">Finishing</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={selectedCardId}
+                      onChange={(event) => setSelectedCardId(event.target.value)}
+                      className="flex-1"
+                    >
+                      <option value="">Select operation</option>
+                      {rateCardsByCategory.FINISHING.map((card) => (
+                        <option key={card.id} value={card.id}>{card.name}</option>
+                      ))}
+                    </Select>
+                    <Button type="button" variant="secondary" onClick={addRateCard} disabled={!selectedCardId}>
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Enclosing Category */}
+              {rateCardsByCategory.ENCLOSING?.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-slate-700">Enclosing</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={selectedCardId}
+                      onChange={(event) => setSelectedCardId(event.target.value)}
+                      className="flex-1"
+                    >
+                      <option value="">Select operation</option>
+                      {rateCardsByCategory.ENCLOSING.map((card) => (
+                        <option key={card.id} value={card.id}>{card.name}</option>
+                      ))}
+                    </Select>
+                    <Button type="button" variant="secondary" onClick={addRateCard} disabled={!selectedCardId}>
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Item Button */}
+              <div className="pt-2 border-t">
+                <Button type="button" variant="ghost" onClick={() => setShowCustomForm(!showCustomForm)}>
+                  + Custom item
+                </Button>
+              </div>
             </div>
             {showCustomForm && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">

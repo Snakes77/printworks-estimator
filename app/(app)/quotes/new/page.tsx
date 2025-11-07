@@ -17,6 +17,7 @@ export default async function NewQuotePage() {
     name: card.name,
     unit: card.unit,
     notes: card.notes,
+    category: card.category,
     bands: card.bands.map((band) => ({
       id: band.id,
       fromQty: band.fromQty,

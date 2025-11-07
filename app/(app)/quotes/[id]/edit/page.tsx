@@ -48,6 +48,7 @@ export default async function EditQuotePage({ params }: { params?: Promise<{ id:
     name: card.name,
     unit: card.unit,
     notes: card.notes,
+    category: card.category,
     bands: card.bands.map((band) => ({
       id: band.id,
       fromQty: band.fromQty,
@@ -63,8 +64,6 @@ export default async function EditQuotePage({ params }: { params?: Promise<{ id:
     projectName: quote.projectName,
     reference: quote.reference,
     quantity: quote.quantity,
-    envelopeType: quote.envelopeType,
-    insertsCount: quote.insertsCount,
     vatRate: Number(quote.vatRate),
     lines: quote.lines.map((line) => ({
       rateCardId: line.rateCardId,
