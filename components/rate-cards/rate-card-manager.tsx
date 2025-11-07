@@ -230,64 +230,80 @@ export const RateCardManager = () => {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">Bands</h3>
-                  <Button type="button" variant="ghost" className="text-xs" onClick={addBand}>
-                    <Plus className="mr-2 h-4 w-4" /> Add band
+                  <h3 className="text-sm font-semibold text-slate-800">Quantity Bands</h3>
+                  <Button type="button" variant="ghost" className="text-xs text-blue-600 hover:text-blue-700" onClick={addBand}>
+                    <Plus className="mr-1 h-4 w-4" /> Add band
                   </Button>
                 </div>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>From</TableHead>
-                        <TableHead>To</TableHead>
-                        <TableHead>£/1k</TableHead>
-                        <TableHead>Make-ready</TableHead>
-                        <TableHead></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {draft.bands.map((band, index) => (
-                        <TableRow key={band.id ?? index}>
-                          <TableCell>
+                <div className="space-y-3">
+                  {draft.bands.map((band, index) => (
+                    <div key={band.id ?? index} className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-600">Band {index + 1}</span>
+                        {draft.bands.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            className="h-auto p-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => removeBand(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`from-${index}`} className="text-xs text-slate-600">Quantity from</Label>
+                          <Input
+                            id={`from-${index}`}
+                            type="number"
+                            value={band.fromQty}
+                            onChange={(event) => updateBand(index, 'fromQty', Number(event.target.value))}
+                            className="bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`to-${index}`} className="text-xs text-slate-600">Quantity to</Label>
+                          <Input
+                            id={`to-${index}`}
+                            type="number"
+                            value={band.toQty}
+                            onChange={(event) => updateBand(index, 'toQty', Number(event.target.value))}
+                            className="bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`price-${index}`} className="text-xs text-slate-600">Price per 1,000</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">£</span>
                             <Input
-                              type="number"
-                              value={band.fromQty}
-                              onChange={(event) => updateBand(index, 'fromQty', Number(event.target.value))}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              value={band.toQty}
-                              onChange={(event) => updateBand(index, 'toQty', Number(event.target.value))}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
+                              id={`price-${index}`}
                               type="number"
                               value={band.pricePerThousand}
                               step="0.01"
                               onChange={(event) => updateBand(index, 'pricePerThousand', Number(event.target.value))}
+                              className="bg-white pl-7"
                             />
-                          </TableCell>
-                          <TableCell>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`makeready-${index}`} className="text-xs text-slate-600">Make-ready</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">£</span>
                             <Input
+                              id={`makeready-${index}`}
                               type="number"
                               value={band.makeReadyFixed}
                               step="0.01"
                               onChange={(event) => updateBand(index, 'makeReadyFixed', Number(event.target.value))}
+                              className="bg-white pl-7"
                             />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" className="text-xs text-red-600" onClick={() => removeBand(index)}>
-                              Remove
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
