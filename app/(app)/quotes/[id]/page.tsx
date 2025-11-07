@@ -24,10 +24,7 @@ export default async function QuoteDetailPage({ params }: { params?: Promise<{ i
     notFound();
   }
 
-  // SECURITY: Verify ownership
-  if (quote.userId !== user.id) {
-    notFound(); // Don't reveal quote exists
-  }
+  // Shared access: All team members can view any quote
 
   const totals = calculateTotals(
     quote.lines.map((line) => ({
@@ -37,7 +34,8 @@ export default async function QuoteDetailPage({ params }: { params?: Promise<{ i
       makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
       unitsInThousands: new Decimal(line.unitsInThousands.toString()),
       lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
-    }))
+    })),
+    Number(quote.discountPercentage)
   );
 
   const serialisedQuote = {
@@ -48,6 +46,7 @@ export default async function QuoteDetailPage({ params }: { params?: Promise<{ i
     quantity: quote.quantity,
     envelopeType: quote.envelopeType,
     insertsCount: quote.insertsCount,
+    status: quote.status as 'DRAFT' | 'SENT' | 'WON' | 'LOST',
     pdfUrl: quote.pdfUrl,
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
@@ -67,6 +66,8 @@ export default async function QuoteDetailPage({ params }: { params?: Promise<{ i
     })),
     totals: {
       subtotal: totals.subtotal.toNumber(),
+      discount: totals.discount.toNumber(),
+      discountPercentage: totals.discountPercentage.toNumber(),
       total: totals.total.toNumber()
     }
   };

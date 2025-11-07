@@ -48,8 +48,15 @@ model Band {
   RateCard         RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
 }
 
+enum QuoteStatus {
+  DRAFT
+  SENT
+  WON
+  LOST
+}
+
 model Quote {
-  id                 String    @id @default(cuid())
+  id                 String      @id @default(cuid())
   userId             String
   clientId           String?
   clientName         String
@@ -58,14 +65,15 @@ model Quote {
   quantity           Int
   envelopeType       String
   insertsCount       Int
-  vatRate            Decimal   @db.Decimal(4, 2)
-  discountPercentage Decimal   @default(0) @db.Decimal(5, 2)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  vatRate            Decimal     @db.Decimal(4, 2)
+  discountPercentage Decimal     @default(0) @db.Decimal(5, 2)
+  status             QuoteStatus @default(DRAFT)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
   lines              QuoteLine[]
   pdfUrl             String?
-  user               User      @relation(fields: [userId], references: [id])
-  client             Client?   @relation(fields: [clientId], references: [id])
+  user               User        @relation(fields: [userId], references: [id])
+  client             Client?     @relation(fields: [clientId], references: [id])
   history            QuoteHistory[]
 }
 

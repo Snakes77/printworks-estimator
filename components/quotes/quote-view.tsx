@@ -10,6 +10,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { formatGBP } from '@/lib/pricing';
 
 type QuoteLine = {
@@ -37,6 +38,7 @@ type QuoteViewProps = {
     quantity: number;
     envelopeType: string;
     insertsCount: number;
+    status: 'DRAFT' | 'SENT' | 'WON' | 'LOST';
     pdfUrl: string | null;
     createdAt: string;
     updatedAt: string;
@@ -54,6 +56,17 @@ type QuoteViewProps = {
 export const QuoteView = ({ quote }: QuoteViewProps) => {
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
+  const utils = trpc.useUtils();
+
+  const updateStatus = trpc.quotes.updateStatus.useMutation({
+    onSuccess: () => {
+      toast.success('Quote status updated');
+      utils.quotes.get.invalidate({ id: quote.id });
+    },
+    onError: (error) => {
+      toast.error('Failed to update status: ' + error.message);
+    }
+  });
 
   const generatePdf = trpc.quotes.generatePdf.useMutation({
     onSuccess: (data) => {
@@ -115,11 +128,28 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">{quote.clientName}</h1>
-          <p className="text-sm text-slate-600">
-            Reference {quote.reference} · Updated {format(new Date(quote.updatedAt), 'dd MMM yyyy HH:mm')}
-          </p>
+        <div className="flex-1 space-y-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">{quote.clientName}</h1>
+            <p className="text-sm text-slate-600">
+              Reference {quote.reference} · Updated {format(new Date(quote.updatedAt), 'dd MMM yyyy HH:mm')}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Label htmlFor="status" className="text-sm font-medium">Status:</Label>
+            <Select
+              id="status"
+              value={quote.status}
+              onChange={(e) => updateStatus.mutate({ quoteId: quote.id, status: e.target.value as any })}
+              disabled={updateStatus.isPending}
+              className="w-auto"
+            >
+              <option value="DRAFT">Draft</option>
+              <option value="SENT">Sent</option>
+              <option value="WON">Won</option>
+              <option value="LOST">Lost</option>
+            </Select>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" asChild>
@@ -128,9 +158,9 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
           <Button variant="secondary" onClick={handleGeneratePdf} disabled={generatePdf.isPending}>
             {generatePdf.isPending ? 'Generating PDF...' : 'Generate PDF'}
           </Button>
-          <Button 
-            variant="primary" 
-            onClick={() => setEmailOpen(!emailOpen)} 
+          <Button
+            variant="primary"
+            onClick={() => setEmailOpen(!emailOpen)}
             disabled={sendEmail.isPending}
           >
             {sendEmail.isPending ? 'Sending…' : 'Send Email'}

@@ -622,5 +622,32 @@ export const quotesRouter = createTRPCRouter({
         const errorMessage = error instanceof Error ? error.message : String(error);
         throw new Error(`Failed to send email: ${errorMessage}`);
       }
+    }),
+  updateStatus: protectedProcedure
+    .input(z.object({
+      quoteId: z.string(),
+      status: z.enum(['DRAFT', 'SENT', 'WON', 'LOST'])
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await ensurePrismaUser(ctx.user);
+
+      // Update quote status and add to history
+      await ctx.prisma.quote.update({
+        where: { id: input.quoteId },
+        data: {
+          status: input.status,
+          history: {
+            create: {
+              action: 'STATUS_CHANGED',
+              payload: {
+                status: input.status,
+                timestamp: new Date().toISOString()
+              }
+            }
+          }
+        }
+      });
+
+      return { success: true };
     })
 });
