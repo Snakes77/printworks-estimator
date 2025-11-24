@@ -93,6 +93,7 @@ model QuoteLine {
   quoteId              String
   rateCardId           String
   description          String
+  quantity             Int?           // Line-specific quantity (defaults to quote quantity if null)
   unitPricePerThousand Decimal        @db.Decimal(10, 2)
   makeReadyFixed       Decimal        @db.Decimal(10, 2)
   unitsInThousands     Decimal        @db.Decimal(12, 3)

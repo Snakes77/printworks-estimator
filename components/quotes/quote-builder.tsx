@@ -77,7 +77,9 @@ type QuoteBuilderProps = {
 type CustomLine = {
   id: string;
   customDescription: string;
+  customSetupCharge: number;
   customPrice: number;
+  customPricingUnit: 'per_1000' | 'per_item';
 };
 
 export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) => {
@@ -85,6 +87,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
   const [selectedRateCardIds, setSelectedRateCardIds] = useState<string[]>(
     existingQuote ? existingQuote.lines.filter(line => line.rateCardId !== 'custom').map((line) => line.rateCardId) : []
   );
+  const [lineQuantities, setLineQuantities] = useState<Record<string, number>>({});
   const [customLines, setCustomLines] = useState<CustomLine[]>(
     existingQuote
       ? existingQuote.lines
@@ -99,7 +102,9 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
   const [selectedCardId, setSelectedCardId] = useState('');
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customDescription, setCustomDescription] = useState('');
+  const [customSetupCharge, setCustomSetupCharge] = useState('');
   const [customPrice, setCustomPrice] = useState('');
+  const [customPricingUnit, setCustomPricingUnit] = useState<'per_1000' | 'per_item'>('per_1000');
   const preview = trpc.quotes.preview.useMutation();
   const createQuote = trpc.quotes.create.useMutation();
   const updateQuote = trpc.quotes.update.useMutation();
@@ -244,6 +249,30 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         )
       },
       {
+        id: 'quantity',
+        header: 'Quantity',
+        cell: ({ row }) => (
+          <Input
+            type="number"
+            className="w-24 text-right"
+            value={lineQuantities[row.original.rateCardId] || ''}
+            placeholder={form.watch('quantity')?.toString() || ''}
+            onChange={(e) => {
+              const val = parseInt(e.target.value);
+              if (!isNaN(val) && val > 0) {
+                setLineQuantities((prev) => ({ ...prev, [row.original.rateCardId]: val }));
+              } else {
+                setLineQuantities((prev) => {
+                  const next = { ...prev };
+                  delete next[row.original.rateCardId];
+                  return next;
+                });
+              }
+            }}
+          />
+        )
+      },
+      {
         accessorKey: 'unitsInThousands',
         header: 'Units (k)',
         cell: ({ getValue }) => <span className="text-right tabular-nums">{Number(getValue() ?? 0).toFixed(3)}</span>
@@ -288,7 +317,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         )
       }
     ],
-    [customLines]
+    [customLines, lineQuantities, form]
   );
 
   const table = useReactTable({
@@ -305,16 +334,20 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
 
   const addCustomLine = () => {
     if (!customDescription || !customPrice) {
-      toast.error('Please enter both description and price for the custom item.');
+      toast.error('Please enter description and price for the custom item.');
       return;
     }
     setCustomLines((current) => [...current, {
       id: Math.random().toString(),
       customDescription,
-      customPrice: parseFloat(customPrice)
+      customSetupCharge: parseFloat(customSetupCharge) || 0,
+      customPrice: parseFloat(customPrice),
+      customPricingUnit
     }]);
     setCustomDescription('');
+    setCustomSetupCharge('');
     setCustomPrice('');
+    setCustomPricingUnit('per_1000');
     setShowCustomForm(false);
   };
 
@@ -332,8 +365,16 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       const payload = {
         ...values,
         lines: [
-          ...selectedRateCardIds.map((id) => ({ rateCardId: id })),
-          ...customLines.map((line) => ({ customDescription: line.customDescription, customPrice: line.customPrice }))
+          ...selectedRateCardIds.map((id) => ({
+            rateCardId: id,
+            quantity: lineQuantities[id] || undefined
+          })),
+          ...customLines.map((line) => ({
+            customDescription: line.customDescription,
+            customSetupCharge: line.customSetupCharge,
+            customPrice: line.customPrice,
+            customPricingUnit: line.customPricingUnit
+          }))
         ]
       };
 
@@ -351,8 +392,9 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
 
       router.push(`/quotes/${result.id}`);
     } catch (error) {
-      console.error(error);
-      toast.error('Unable to save the quote. Please try again.');
+      console.error('Quote save error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unable to save the quote. Please try again.';
+      toast.error(errorMessage);
     }
   });
 
@@ -489,16 +531,40 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
             {showCustomForm && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
                 <h4 className="text-sm font-semibold text-slate-900">Add bespoke line item</h4>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="customDescription" className="text-xs">Description</Label>
+                  <Input
+                    id="customDescription"
+                    value={customDescription}
+                    onChange={(e) => setCustomDescription(e.target.value)}
+                    placeholder="e.g., Custom die cutting"
+                    className="bg-white"
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Label htmlFor="customDescription" className="text-xs">Description</Label>
+                    <Label htmlFor="customSetupCharge" className="text-xs">Setup Charge (£)</Label>
                     <Input
-                      id="customDescription"
-                      value={customDescription}
-                      onChange={(e) => setCustomDescription(e.target.value)}
-                      placeholder="e.g., Custom die cutting"
+                      id="customSetupCharge"
+                      type="number"
+                      step="0.01"
+                      value={customSetupCharge}
+                      onChange={(e) => setCustomSetupCharge(e.target.value)}
+                      placeholder="0.00"
                       className="bg-white"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customPricingUnit" className="text-xs">Pricing Unit</Label>
+                    <Select
+                      id="customPricingUnit"
+                      value={customPricingUnit}
+                      onChange={(e) => setCustomPricingUnit(e.target.value as 'per_1000' | 'per_item')}
+                      className="bg-white"
+                    >
+                      <option value="per_1000">Per 1000</option>
+                      <option value="per_item">Per Item</option>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="customPrice" className="text-xs">Price (£)</Label>

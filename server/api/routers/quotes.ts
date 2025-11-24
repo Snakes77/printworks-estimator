@@ -57,9 +57,12 @@ const serialiseTotals = (totals: ReturnType<typeof calculateTotals>) => ({
 const lineSelectionSchema = z.object({
   rateCardId: z.string().optional(),
   description: z.string().optional(),
+  quantity: z.number().int().positive().optional(), // Line-specific quantity
   // For custom/bespoke line items
   customDescription: z.string().optional(),
-  customPrice: z.number().optional()
+  customSetupCharge: z.number().optional(),
+  customPrice: z.number().optional(),
+  customPricingUnit: z.enum(['per_1000', 'per_item']).optional()
 });
 
 const quotePayloadSchema = z.object({
@@ -271,26 +274,44 @@ export const quotesRouter = createTRPCRouter({
       return card;
     });
 
-    const lineCalculations = orderedCards.map((card) => {
+    const lineCalculations = orderedCards.map((card, index) => {
+      const line = rateCardLines[index];
+      const lineQty = line.quantity ?? input.quantity; // Use line quantity or fallback to quote quantity
       const band = card.bands.find(
-        (b) => input.quantity >= b.fromQty && input.quantity <= b.toQty
+        (b) => lineQty >= b.fromQty && lineQty <= b.toQty
       );
       if (!band) {
-        throw new Error(`No band for ${card.name} at quantity ${input.quantity}`);
+        throw new Error(`No band for ${card.name} at quantity ${lineQty}`);
       }
-      return calculateLine(card, band, input.quantity);
+      return calculateLine(card, band, lineQty);
     });
 
     // Add custom lines (default to PRINT category for custom items)
-    const customLineCalculations = customLines.map(line => ({
-      rateCardId: 'custom',
-      description: line.customDescription!,
-      unitPricePerThousand: new Decimal(0),
-      makeReadyFixed: new Decimal(0),
-      unitsInThousands: new Decimal(0),
-      lineTotalExVat: new Decimal(line.customPrice ?? 0),
-      category: 'PRINT' as QuoteCategory // Default custom items to PRINT
-    }));
+    const customLineCalculations = customLines.map(line => {
+      const lineQty = line.quantity ?? input.quantity; // Use line quantity or fallback to quote quantity
+      const setupCharge = new Decimal(line.customSetupCharge ?? 0);
+      const price = new Decimal(line.customPrice ?? 0);
+      const unit = line.customPricingUnit ?? 'per_1000';
+
+      // Calculate based on pricing unit
+      let total: Decimal;
+      if (unit === 'per_item') {
+        total = setupCharge.plus(price.times(lineQty));
+      } else {
+        // per_1000
+        total = setupCharge.plus(price.times(lineQty).div(1000));
+      }
+
+      return {
+        rateCardId: 'custom',
+        description: line.customDescription!,
+        unitPricePerThousand: unit === 'per_1000' ? price : new Decimal(0),
+        makeReadyFixed: setupCharge,
+        unitsInThousands: new Decimal(lineQty).div(1000),
+        lineTotalExVat: total,
+        category: 'PRINT' as QuoteCategory
+      };
+    });
 
     const allLineCalculations = [...lineCalculations, ...customLineCalculations];
     const totals = calculateTotals(allLineCalculations, input.quantity, input.discountPercentage);
