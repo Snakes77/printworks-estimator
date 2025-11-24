@@ -47,9 +47,6 @@ export default async function QuotePdfPage({ params }: { params: Promise<{ id: s
         projectName: quote.projectName,
         reference: quote.reference,
         quantity: quote.quantity,
-        envelopeType: quote.envelopeType,
-        insertsCount: quote.insertsCount,
-        vatRate: Number(quote.vatRate),
         createdAt: quote.createdAt,
         lines: quote.lines.map((line) => ({
           description: line.description,

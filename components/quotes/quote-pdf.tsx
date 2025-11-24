@@ -17,8 +17,6 @@ type QuotePdfProps = {
     projectName: string;
     reference: string;
     quantity: number;
-    envelopeType: string;
-    insertsCount: number;
     createdAt: Date;
     lines: QuoteLine[];
   };
@@ -98,10 +96,6 @@ export const QuotePdf = ({ quote, totals }: QuotePdfProps) => {
         }}>
           <span style={{ color: '#666666' }}>Quantity:</span>
           <span style={{ fontWeight: 600 }}>{quote.quantity.toLocaleString('en-GB')}</span>
-          <span style={{ color: '#666666' }}>Envelope:</span>
-          <span style={{ fontWeight: 600 }}>{quote.envelopeType}</span>
-          <span style={{ color: '#666666' }}>Inserts:</span>
-          <span style={{ fontWeight: 600 }}>{quote.insertsCount}</span>
         </div>
       </section>
 
