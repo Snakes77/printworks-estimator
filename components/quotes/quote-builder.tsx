@@ -95,7 +95,9 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           .map(line => ({
             id: line.rateCardId + Math.random(),
             customDescription: line.description,
-            customPrice: line.lineTotalExVat
+            customSetupCharge: line.makeReadyFixed,
+            customPrice: line.unitPricePerThousand,
+            customPricingUnit: 'per_1000' as const
           }))
       : []
   );
