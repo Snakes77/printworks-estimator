@@ -36,8 +36,6 @@ type QuoteViewProps = {
     projectName: string;
     reference: string;
     quantity: number;
-    envelopeType: string;
-    insertsCount: number;
     status: 'DRAFT' | 'SENT' | 'WON' | 'LOST';
     pdfUrl: string | null;
     createdAt: string;
@@ -264,14 +262,6 @@ export const QuoteView = ({ quote }: QuoteViewProps) => {
               <div className="flex justify-between">
                 <dt>Quantity</dt>
                 <dd>{quote.quantity.toLocaleString('en-GB')}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Envelope</dt>
-                <dd>{quote.envelopeType}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>Inserts</dt>
-                <dd>{quote.insertsCount}</dd>
               </div>
             </dl>
           </CardFooter>

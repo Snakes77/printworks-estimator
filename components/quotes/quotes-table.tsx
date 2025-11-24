@@ -53,8 +53,6 @@ export const QuotesTable = () => {
               <TableHead>Client</TableHead>
               <TableHead>Reference</TableHead>
               <TableHead className="text-right">Quantity</TableHead>
-              <TableHead>Envelope</TableHead>
-              <TableHead className="text-right">Inserts</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Updated</TableHead>
               <TableHead>Actions</TableHead>
@@ -66,8 +64,6 @@ export const QuotesTable = () => {
                 <TableCell>{quote.clientName}</TableCell>
                 <TableCell>{quote.reference}</TableCell>
                 <TableCell className="text-right">{quote.quantity.toLocaleString('en-GB')}</TableCell>
-                <TableCell>{quote.envelopeType}</TableCell>
-                <TableCell className="text-right">{quote.insertsCount}</TableCell>
                 <TableCell className="text-right">{formatGBP(quote.totals.total)}</TableCell>
                 <TableCell>{new Date(quote.updatedAt).toLocaleDateString('en-GB')}</TableCell>
                 <TableCell>

@@ -304,10 +304,6 @@ export default async function PrintPage({ params }: { params?: Promise<{ id: str
             <div className="project-details">
               <span className="detail-label">Quantity</span>
               <span className="detail-value">{quote.quantity.toLocaleString('en-GB')}</span>
-              <span className="detail-label">Envelope</span>
-              <span className="detail-value">{quote.envelopeType}</span>
-              <span className="detail-label">Inserts</span>
-              <span className="detail-value">{quote.insertsCount}</span>
             </div>
           </div>
 

@@ -27,15 +27,16 @@ model User {
 }
 
 model RateCard {
-  id         String      @id @default(cuid())
-  code       String      @unique
+  id         String         @id @default(cuid())
+  code       String         @unique
   name       String
   unit       String
   notes      String?
+  category   QuoteCategory? // Categorize each rate card
   bands      Band[]
   quoteLines QuoteLine[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 }
 
 model Band {
@@ -55,16 +56,26 @@ enum QuoteStatus {
   LOST
 }
 
+enum QuoteCategory {
+  ENVELOPES
+  PRINT
+  DATA_PROCESSING
+  PERSONALISATION
+  FINISHING
+  ENCLOSING
+  POSTAGE
+}
+
 model Quote {
   id                 String      @id @default(cuid())
   userId             String
   clientId           String?
   clientName         String
   projectName        String
-  reference          String
+  baseReference      String?     // "Q00001" - never changes (optional for migration compatibility)
+  revisionNumber     Int         @default(0) // Increments: Q00001-1, Q00001-2
+  reference          String      // Computed: baseReference + "-" + revisionNumber (kept for backward compatibility)
   quantity           Int
-  envelopeType       String
-  insertsCount       Int
   vatRate            Decimal     @db.Decimal(4, 2)
   discountPercentage Decimal     @default(0) @db.Decimal(5, 2)
   status             QuoteStatus @default(DRAFT)
@@ -78,18 +89,22 @@ model Quote {
 }
 
 model QuoteLine {
-  id                   String   @id @default(cuid())
+  id                   String         @id @default(cuid())
   quoteId              String
   rateCardId           String
   description          String
-  unitPricePerThousand Decimal @db.Decimal(10, 2)
-  makeReadyFixed       Decimal @db.Decimal(10, 2)
-  unitsInThousands     Decimal @db.Decimal(12, 3)
-  lineTotalExVat       Decimal @db.Decimal(12, 2)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  quote                Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  rateCard             RateCard @relation(fields: [rateCardId], references: [id])
+  unitPricePerThousand Decimal        @db.Decimal(10, 2)
+  makeReadyFixed       Decimal        @db.Decimal(10, 2)
+  unitsInThousands     Decimal        @db.Decimal(12, 3)
+  lineTotalExVat       Decimal        @db.Decimal(12, 2)
+  category             QuoteCategory? @default(PRINT) // Temporarily optional for migration
+  isManualItem         Boolean        @default(false)
+  manualQuantity       Decimal?       @db.Decimal(12, 3) // For envelope wastage: 53.000
+  pricePerItem         Decimal?       @db.Decimal(10, 3) // For postage: £0.259
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  quote                Quote          @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  rateCard             RateCard       @relation(fields: [rateCardId], references: [id])
 }
 
 model QuoteHistory {
@@ -104,3 +119,11 @@ model QuoteHistory {
 }
 
 // AuditEvent is an alias for QuoteHistory - use QuoteHistory for consistency
+
+model QuoteCounter {
+  id        String   @id @default("singleton")
+  lastNumber Int    @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("quote_counter")
+}

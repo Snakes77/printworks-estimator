@@ -1,0 +1,18 @@
+# Production Environment Variables for Vercel Deployment
+# Copy these EXACTLY into Vercel's Environment Variables settings
+
+# Supabase Configuration (Required)
+NEXT_PUBLIC_SUPABASE_URL=https://nlkzpiiqizbkxnuxlsnq.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sa3pwaWlxaXpia3hudXhsc25xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3MzkxMTQsImV4cCI6MjA3NzMxNTExNH0.KnIbOgbLnCrBfPq28_i6YC9xToMuLEWMlCGhrIlN-jA
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sa3pwaWlxaXpia3hudXhsc25xIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTczOTExNCwiZXhwIjoyMDc3MzE1MTE0fQ.lhR5aqYk-sy6cypNRE3M1ZKHeo-TELs_FlQpdQyjoyM
+
+# Database (Required)
+DATABASE_URL=postgresql://postgres:DogFood1977!@db.nlkzpiiqizbkxnuxlsnq.supabase.co:5432/postgres
+SUPABASE_DB_URL=postgresql://postgres:DogFood1977!@db.nlkzpiiqizbkxnuxlsnq.supabase.co:5432/postgres
+
+# Site URL (Required - UPDATE THIS after first deployment with your actual Vercel URL)
+NEXT_PUBLIC_SITE_URL=https://your-app.vercel.app
+
+# Email (Required for sending quotes)
+RESEND_API_KEY=re_7EHmXVAF_FXXgPWfmtWQRoGo1TUcc2uWR
+RESEND_FROM_EMAIL=quotes@updates.staxxd.co.uk

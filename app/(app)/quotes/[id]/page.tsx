@@ -44,8 +44,6 @@ export default async function QuoteDetailPage({ params }: { params?: Promise<{ i
     projectName: quote.projectName,
     reference: quote.reference,
     quantity: quote.quantity,
-    envelopeType: quote.envelopeType,
-    insertsCount: quote.insertsCount,
     status: quote.status as 'DRAFT' | 'SENT' | 'WON' | 'LOST',
     pdfUrl: quote.pdfUrl,
     createdAt: quote.createdAt.toISOString(),

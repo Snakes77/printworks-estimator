@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, QuoteCategory } from '@prisma/client';
 import { z } from 'zod';
 import Decimal from 'decimal.js';
 import { createTRPCRouter, protectedProcedure } from '@/server/api/trpc';
@@ -9,6 +9,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { sendQuoteEmail } from '@/lib/email';
 import { generatePdfFromUrl, isPdfCoConfigured } from '@/lib/pdf/pdfco';
+import { getNextQuoteNumber } from '@/lib/quote-numbering';
 
 const serialiseLine = (line: {
   id: string;
@@ -19,6 +20,10 @@ const serialiseLine = (line: {
   makeReadyFixed: Prisma.Decimal;
   unitsInThousands: Prisma.Decimal;
   lineTotalExVat: Prisma.Decimal;
+  category: QuoteCategory;
+  isManualItem: boolean;
+  manualQuantity: Prisma.Decimal | null;
+  pricePerItem: Prisma.Decimal | null;
   createdAt: Date;
   updatedAt: Date;
 }) => ({
@@ -26,14 +31,26 @@ const serialiseLine = (line: {
   unitPricePerThousand: Number(line.unitPricePerThousand),
   makeReadyFixed: Number(line.makeReadyFixed),
   unitsInThousands: Number(line.unitsInThousands),
-  lineTotalExVat: Number(line.lineTotalExVat)
+  lineTotalExVat: Number(line.lineTotalExVat),
+  manualQuantity: line.manualQuantity ? Number(line.manualQuantity) : null,
+  pricePerItem: line.pricePerItem ? Number(line.pricePerItem) : null
 });
 
 const serialiseTotals = (totals: ReturnType<typeof calculateTotals>) => ({
   subtotal: totals.subtotal.toNumber(),
   discount: totals.discount.toNumber(),
   discountPercentage: totals.discountPercentage.toNumber(),
-  total: totals.total.toNumber()
+  total: totals.total.toNumber(),
+  categoryTotals: {
+    ENVELOPES: totals.categoryTotals.ENVELOPES.toNumber(),
+    PRINT: totals.categoryTotals.PRINT.toNumber(),
+    DATA_PROCESSING: totals.categoryTotals.DATA_PROCESSING.toNumber(),
+    PERSONALISATION: totals.categoryTotals.PERSONALISATION.toNumber(),
+    FINISHING: totals.categoryTotals.FINISHING.toNumber(),
+    ENCLOSING: totals.categoryTotals.ENCLOSING.toNumber(),
+    POSTAGE: totals.categoryTotals.POSTAGE.toNumber()
+  },
+  pricePerThousand: totals.pricePerThousand.toNumber()
 });
 
 const lineSelectionSchema = z.object({
@@ -49,8 +66,6 @@ const quotePayloadSchema = z.object({
   projectName: z.string().trim().min(1).max(200),
   reference: z.string().trim().min(1).max(100),
   quantity: z.number().int().positive().max(1_000_000),
-  envelopeType: z.string().trim().min(1).max(50),
-  insertsCount: z.number().int().min(0).max(100),
   discountPercentage: z.number().min(0).max(100).default(0),
   lines: z.array(lineSelectionSchema).min(1).max(100)
 });
@@ -94,8 +109,10 @@ export const quotesRouter = createTRPCRouter({
             unitPricePerThousand: new Decimal(line.unitPricePerThousand.toString()),
             makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
             unitsInThousands: new Decimal(line.unitsInThousands.toString()),
-            lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
+            lineTotalExVat: new Decimal(line.lineTotalExVat.toString()),
+            category: line.category
           })),
+          quote.quantity,
           Number(quote.discountPercentage)
         );
 
@@ -105,8 +122,6 @@ export const quotesRouter = createTRPCRouter({
           projectName: quote.projectName,
           reference: quote.reference,
           quantity: quote.quantity,
-          envelopeType: quote.envelopeType,
-          insertsCount: quote.insertsCount,
           pdfUrl: quote.pdfUrl,
           createdAt: quote.createdAt,
           updatedAt: quote.updatedAt,
@@ -143,8 +158,10 @@ export const quotesRouter = createTRPCRouter({
         unitPricePerThousand: new Decimal(line.unitPricePerThousand.toString()),
         makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
         unitsInThousands: new Decimal(line.unitsInThousands.toString()),
-        lineTotalExVat: new Decimal(line.lineTotalExVat.toString())
+        lineTotalExVat: new Decimal(line.lineTotalExVat.toString()),
+        category: line.category
       })),
+      quote.quantity,
       Number(quote.discountPercentage)
     );
 
@@ -154,8 +171,6 @@ export const quotesRouter = createTRPCRouter({
       projectName: quote.projectName,
       reference: quote.reference,
       quantity: quote.quantity,
-      envelopeType: quote.envelopeType,
-      insertsCount: quote.insertsCount,
       createdAt: quote.createdAt,
       updatedAt: quote.updatedAt,
       pdfUrl: quote.pdfUrl,
@@ -182,9 +197,9 @@ export const quotesRouter = createTRPCRouter({
       return card;
     });
 
-    const calculatedLines = calculateQuoteLines(input.quantity, input.insertsCount, orderedCards);
+    const calculatedLines = calculateQuoteLines(input.quantity, orderedCards);
 
-    // Add custom lines
+    // Add custom lines (default to PRINT category for custom items)
     const allLines = [
       ...calculatedLines,
       ...customLines.map(line => ({
@@ -193,11 +208,12 @@ export const quotesRouter = createTRPCRouter({
         unitPricePerThousand: new Decimal(0),
         makeReadyFixed: new Decimal(0),
         unitsInThousands: new Decimal(0),
-        lineTotalExVat: new Decimal(line.customPrice ?? 0)
+        lineTotalExVat: new Decimal(line.customPrice ?? 0),
+        category: 'PRINT' as QuoteCategory // Default custom items to PRINT
       }))
     ];
 
-    const totals = calculateTotals(allLines, input.discountPercentage);
+    const totals = calculateTotals(allLines, input.quantity, input.discountPercentage);
 
     return {
       lines: allLines.map((line) => ({
@@ -216,6 +232,27 @@ export const quotesRouter = createTRPCRouter({
 
     // SECURITY: Rate limit quote creation
     await checkRateLimit(user.id, RATE_LIMITS.QUOTE_CREATE);
+
+    // Generate quote number if not provided
+    let baseReference = input.reference;
+    let reference = input.reference;
+    let revisionNumber = 0;
+    
+    // If reference is not in Q00001 format, generate a new one
+    if (!input.reference.match(/^Q\d{5}(-\d+)?$/)) {
+      const quoteNumber = await getNextQuoteNumber();
+      baseReference = quoteNumber.baseReference;
+      reference = quoteNumber.reference;
+      revisionNumber = 0;
+    } else {
+      // Extract base reference from Q00001-1 format
+      const match = input.reference.match(/^(Q\d{5})(?:-(\d+))?$/);
+      if (match) {
+        baseReference = match[1]!;
+        revisionNumber = match[2] ? parseInt(match[2]!, 10) : 0;
+        reference = input.reference;
+      }
+    }
 
     const rateCardLines = input.lines.filter(line => line.rateCardId);
     const customLines = input.lines.filter(line => line.customDescription);
@@ -240,21 +277,22 @@ export const quotesRouter = createTRPCRouter({
       if (!band) {
         throw new Error(`No band for ${card.name} at quantity ${input.quantity}`);
       }
-      return calculateLine(card, band, input.quantity, input.insertsCount);
+      return calculateLine(card, band, input.quantity);
     });
 
-    // Add custom lines
+    // Add custom lines (default to PRINT category for custom items)
     const customLineCalculations = customLines.map(line => ({
       rateCardId: 'custom',
       description: line.customDescription!,
       unitPricePerThousand: new Decimal(0),
       makeReadyFixed: new Decimal(0),
       unitsInThousands: new Decimal(0),
-      lineTotalExVat: new Decimal(line.customPrice ?? 0)
+      lineTotalExVat: new Decimal(line.customPrice ?? 0),
+      category: 'PRINT' as QuoteCategory // Default custom items to PRINT
     }));
 
     const allLineCalculations = [...lineCalculations, ...customLineCalculations];
-    const totals = calculateTotals(allLineCalculations, input.discountPercentage);
+    const totals = calculateTotals(allLineCalculations, input.quantity, input.discountPercentage);
 
     const quote = await ctx.prisma.quote.create({
       data: {
@@ -262,10 +300,10 @@ export const quotesRouter = createTRPCRouter({
         discountPercentage: new Prisma.Decimal(input.discountPercentage.toString()),
         clientName: input.clientName,
         projectName: input.projectName,
-        reference: input.reference,
+        baseReference,
+        revisionNumber,
+        reference,
         quantity: input.quantity,
-        envelopeType: input.envelopeType,
-        insertsCount: input.insertsCount,
         vatRate: new Prisma.Decimal(0), // Quotes don't include VAT, set to 0 for backward compatibility
         lines: {
           create: allLineCalculations.map((line) => ({
@@ -274,7 +312,9 @@ export const quotesRouter = createTRPCRouter({
             unitPricePerThousand: new Prisma.Decimal(line.unitPricePerThousand.toString()),
             makeReadyFixed: new Prisma.Decimal(line.makeReadyFixed.toString()),
             unitsInThousands: new Prisma.Decimal(line.unitsInThousands.toString()),
-            lineTotalExVat: new Prisma.Decimal(line.lineTotalExVat.toString())
+            lineTotalExVat: new Prisma.Decimal(line.lineTotalExVat.toString()),
+            category: line.category,
+            isManualItem: line.rateCardId === 'custom'
           }))
         },
         history: {
@@ -342,21 +382,22 @@ export const quotesRouter = createTRPCRouter({
         if (!band) {
           throw new Error(`No band for ${card.name} at quantity ${input.quantity}`);
       }
-        return calculateLine(card, band, input.quantity, input.insertsCount);
+        return calculateLine(card, band, input.quantity);
       });
 
-      // Add custom lines
+      // Add custom lines (default to PRINT category for custom items)
       const customLineCalculations = customLines.map(line => ({
         rateCardId: 'custom',
         description: line.customDescription!,
         unitPricePerThousand: new Decimal(0),
         makeReadyFixed: new Decimal(0),
         unitsInThousands: new Decimal(0),
-        lineTotalExVat: new Decimal(line.customPrice ?? 0)
+        lineTotalExVat: new Decimal(line.customPrice ?? 0),
+        category: 'PRINT' as QuoteCategory // Default custom items to PRINT
       }));
 
       const allLineCalculations = [...lineCalculations, ...customLineCalculations];
-      const totals = calculateTotals(allLineCalculations, input.discountPercentage);
+      const totals = calculateTotals(allLineCalculations, input.quantity, input.discountPercentage);
 
       // Track what changed for history
       const changes: string[] = [];
@@ -369,12 +410,6 @@ export const quotesRouter = createTRPCRouter({
       }
       if (existing.projectName !== input.projectName) {
         changes.push(`Project: "${existing.projectName}" → "${input.projectName}"`);
-      }
-      if (existing.envelopeType !== input.envelopeType) {
-        changes.push(`Envelope: ${existing.envelopeType} → ${input.envelopeType}`);
-      }
-      if (existing.insertsCount !== input.insertsCount) {
-        changes.push(`Inserts: ${existing.insertsCount} → ${input.insertsCount}`);
       }
       if (Number(existing.discountPercentage) !== input.discountPercentage) {
         changes.push(`Discount: ${existing.discountPercentage}% → ${input.discountPercentage}%`);
@@ -410,8 +445,6 @@ export const quotesRouter = createTRPCRouter({
           projectName: input.projectName,
           reference: input.reference,
           quantity: input.quantity,
-          envelopeType: input.envelopeType,
-          insertsCount: input.insertsCount,
           discountPercentage: new Prisma.Decimal(input.discountPercentage.toString()),
           vatRate: new Prisma.Decimal(0), // Quotes don't include VAT, set to 0 for backward compatibility
           lines: {
@@ -421,7 +454,9 @@ export const quotesRouter = createTRPCRouter({
               unitPricePerThousand: new Prisma.Decimal(line.unitPricePerThousand.toString()),
               makeReadyFixed: new Prisma.Decimal(line.makeReadyFixed.toString()),
               unitsInThousands: new Prisma.Decimal(line.unitsInThousands.toString()),
-              lineTotalExVat: new Prisma.Decimal(line.lineTotalExVat.toString())
+              lineTotalExVat: new Prisma.Decimal(line.lineTotalExVat.toString()),
+              category: line.category,
+              isManualItem: line.rateCardId === 'custom'
             }))
           },
         history: {
