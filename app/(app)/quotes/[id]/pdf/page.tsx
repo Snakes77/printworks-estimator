@@ -58,7 +58,6 @@ export default async function QuotePdfPage({ params }: { params: Promise<{ id: s
       }}
       totals={{
         subtotal: totals.subtotal.toNumber(),
-        vat: totals.vat.toNumber(),
         total: totals.total.toNumber()
       }}
     />
