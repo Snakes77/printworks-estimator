@@ -106,7 +106,6 @@ export const generateQuotePdfBuffer = async (quoteId: string, userId: string) =>
     if (isProduction) {
       // Production: use Chromium package settings
       launchOptions.args = chromium.args;
-      launchOptions.defaultViewport = chromium.defaultViewport;
     } else {
       // Development: minimal args for local Chrome
       launchOptions.args = [
