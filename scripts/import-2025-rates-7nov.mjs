@@ -28,7 +28,7 @@ async function importRates() {
     const makeReadyFixed = typeof setupCharge === 'number' ? setupCharge : 0;
     const price = typeof pricePerThousand === 'number' ? pricePerThousand : 0;
 
-    // Skip if no valid pricing
+    // Skip only if NO pricing at all (both setup and per-1000 are zero or missing)
     if (makeReadyFixed === 0 && price === 0) {
       console.log(`Skipping "${process}" - no pricing data`);
       skipped++;
