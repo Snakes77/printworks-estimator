@@ -142,7 +142,6 @@ export const generateQuotePdfBuffer = async (quoteId: string, userId: string) =>
       quote,
       totals: {
         subtotal: totals.subtotal.toNumber(),
-        vat: totals.vat.toNumber(),
         total: totals.total.toNumber()
       }
     };

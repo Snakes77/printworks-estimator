@@ -20,7 +20,7 @@ const serialiseLine = (line: {
   makeReadyFixed: Prisma.Decimal;
   unitsInThousands: Prisma.Decimal;
   lineTotalExVat: Prisma.Decimal;
-  category: QuoteCategory;
+  category: QuoteCategory | null;
   isManualItem: boolean;
   manualQuantity: Prisma.Decimal | null;
   pricePerItem: Prisma.Decimal | null;
@@ -28,6 +28,7 @@ const serialiseLine = (line: {
   updatedAt: Date;
 }) => ({
   ...line,
+  category: line.category ?? 'PRINT',
   unitPricePerThousand: Number(line.unitPricePerThousand),
   makeReadyFixed: Number(line.makeReadyFixed),
   unitsInThousands: Number(line.unitsInThousands),
@@ -110,7 +111,7 @@ export const quotesRouter = createTRPCRouter({
             makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
             unitsInThousands: new Decimal(line.unitsInThousands.toString()),
             lineTotalExVat: new Decimal(line.lineTotalExVat.toString()),
-            category: line.category
+            category: line.category ?? 'PRINT'
           })),
           quote.quantity,
           Number(quote.discountPercentage)
@@ -159,7 +160,7 @@ export const quotesRouter = createTRPCRouter({
         makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
         unitsInThousands: new Decimal(line.unitsInThousands.toString()),
         lineTotalExVat: new Decimal(line.lineTotalExVat.toString()),
-        category: line.category
+        category: line.category ?? 'PRINT'
       })),
       quote.quantity,
       Number(quote.discountPercentage)
