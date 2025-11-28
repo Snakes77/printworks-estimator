@@ -274,7 +274,8 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         header: 'Quantity',
         cell: ({ row }) => (
           <Input
-            type="number"
+            type="text"
+            inputMode="numeric"
             className="w-24 text-right"
             value={lineQuantities[row.original.rateCardId] || ''}
             placeholder={form.watch('quantity')?.toString() || ''}
@@ -282,7 +283,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
               const val = parseInt(e.target.value);
               if (!isNaN(val) && val > 0) {
                 setLineQuantities((prev) => ({ ...prev, [row.original.rateCardId]: val }));
-              } else {
+              } else if (e.target.value === '') {
                 setLineQuantities((prev) => {
                   const next = { ...prev };
                   delete next[row.original.rateCardId];
@@ -303,17 +304,17 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         header: 'Unit £/1k',
         cell: ({ row }) => (
           <Input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={lineOverrides[row.original.rateCardId]?.unitPricePerThousand ?? row.original.unitPricePerThousand}
             onChange={(e) => {
               const val = parseFloat(e.target.value);
-              if (!isNaN(val)) {
+              if (!isNaN(val) || e.target.value === '' || e.target.value === '-') {
                 setLineOverrides((prev) => ({
                   ...prev,
                   [row.original.rateCardId]: {
                     ...prev[row.original.rateCardId],
-                    unitPricePerThousand: val
+                    unitPricePerThousand: isNaN(val) ? 0 : val
                   }
                 }));
               }
@@ -327,17 +328,17 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         header: 'Make-ready',
         cell: ({ row }) => (
           <Input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={lineOverrides[row.original.rateCardId]?.makeReadyFixed ?? row.original.makeReadyFixed}
             onChange={(e) => {
               const val = parseFloat(e.target.value);
-              if (!isNaN(val)) {
+              if (!isNaN(val) || e.target.value === '' || e.target.value === '-') {
                 setLineOverrides((prev) => ({
                   ...prev,
                   [row.original.rateCardId]: {
                     ...prev[row.original.rateCardId],
-                    makeReadyFixed: val
+                    makeReadyFixed: isNaN(val) ? 0 : val
                   }
                 }));
               }
@@ -722,8 +723,8 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
               <Label htmlFor="discountPercentage">Rebates</Label>
               <Input
                 id="discountPercentage"
-                type="number"
-                step={0.01}
+                type="text"
+                inputMode="decimal"
                 placeholder="0"
                 {...form.register('discountPercentage', { valueAsNumber: true })}
               />
