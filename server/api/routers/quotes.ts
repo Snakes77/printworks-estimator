@@ -204,7 +204,38 @@ export const quotesRouter = createTRPCRouter({
       return card;
     });
 
-    const calculatedLines = calculateQuoteLines(input.quantity, orderedCards);
+    // Calculate lines with overrides support
+    const calculatedLines = orderedCards.map((card, index) => {
+      const line = rateCardLines[index]!;
+      const lineQty = line.quantity ?? input.quantity;
+      const band = card.bands.find(
+        (b) => lineQty >= b.fromQty && lineQty <= b.toQty
+      );
+      if (!band) {
+        throw new Error(`No band for ${card.name} at quantity ${lineQty}`);
+      }
+      const calculated = calculateLine(card, band, lineQty);
+
+      // Apply overrides if provided
+      if (line.description) {
+        calculated.description = line.description;
+      }
+      if (line.unitPricePerThousand !== undefined) {
+        calculated.unitPricePerThousand = new Decimal(line.unitPricePerThousand);
+      }
+      if (line.makeReadyFixed !== undefined) {
+        calculated.makeReadyFixed = new Decimal(line.makeReadyFixed);
+      }
+
+      // Recalculate line total if pricing was overridden
+      if (line.unitPricePerThousand !== undefined || line.makeReadyFixed !== undefined) {
+        calculated.lineTotalExVat = calculated.makeReadyFixed.add(
+          calculated.unitsInThousands.mul(calculated.unitPricePerThousand)
+        );
+      }
+
+      return calculated;
+    });
 
     // Add custom lines (default to PRINT category for custom items)
     const allLines = [

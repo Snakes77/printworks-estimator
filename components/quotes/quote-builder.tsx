@@ -153,12 +153,18 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
     preview.mutate({
       ...values,
       lines: [
-        ...selectedRateCardIds.map((id) => ({ rateCardId: id })),
+        ...selectedRateCardIds.map((id) => ({
+          rateCardId: id,
+          quantity: lineQuantities[id] || undefined,
+          description: lineOverrides[id]?.description,
+          unitPricePerThousand: lineOverrides[id]?.unitPricePerThousand,
+          makeReadyFixed: lineOverrides[id]?.makeReadyFixed
+        })),
         ...customLines.map((line) => ({ customDescription: line.customDescription, customPrice: line.customPrice }))
       ]
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRateCardIds, customLines, quantity, discountPercentage]);
+  }, [selectedRateCardIds, customLines, quantity, discountPercentage, lineQuantities, lineOverrides]);
 
   // Live preview when a card is selected in dropdown
   useEffect(() => {
