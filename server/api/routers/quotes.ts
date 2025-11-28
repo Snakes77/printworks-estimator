@@ -109,31 +109,36 @@ export const quotesRouter = createTRPCRouter({
       });
 
       return quotes.map((quote) => {
-        const totals = calculateTotals(
-          quote.lines.map((line) => ({
-            rateCardId: line.rateCardId,
-            description: line.description,
-            unitPricePerThousand: new Decimal(line.unitPricePerThousand.toString()),
-            makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
-            unitsInThousands: new Decimal(line.unitsInThousands.toString()),
-            lineTotalExVat: new Decimal(line.lineTotalExVat.toString()),
-            category: line.category ?? 'PRINT'
-          })),
-          quote.quantity,
-          Number(quote.discountPercentage)
-        );
+        try {
+          const totals = calculateTotals(
+            quote.lines.map((line) => ({
+              rateCardId: line.rateCardId,
+              description: line.description,
+              unitPricePerThousand: new Decimal(line.unitPricePerThousand.toString()),
+              makeReadyFixed: new Decimal(line.makeReadyFixed.toString()),
+              unitsInThousands: new Decimal(line.unitsInThousands.toString()),
+              lineTotalExVat: new Decimal(line.lineTotalExVat.toString()),
+              category: line.category ?? 'PRINT'
+            })),
+            quote.quantity,
+            Number(quote.discountPercentage)
+          );
 
-        return {
-          id: quote.id,
-          clientName: quote.clientName,
-          projectName: quote.projectName,
-          reference: quote.reference,
-          quantity: quote.quantity,
-          pdfUrl: quote.pdfUrl,
-          createdAt: quote.createdAt,
-          updatedAt: quote.updatedAt,
-          totals: serialiseTotals(totals)
-        };
+          return {
+            id: quote.id,
+            clientName: quote.clientName,
+            projectName: quote.projectName,
+            reference: quote.reference,
+            quantity: quote.quantity,
+            pdfUrl: quote.pdfUrl,
+            createdAt: quote.createdAt,
+            updatedAt: quote.updatedAt,
+            totals: serialiseTotals(totals)
+          };
+        } catch (error) {
+          console.error(`Error calculating totals for quote ${quote.id}:`, error);
+          throw error;
+        }
       });
     }),
   get: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
