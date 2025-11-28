@@ -21,7 +21,7 @@ const quoteSchema = z.object({
   projectName: z.string().min(1, 'Project name is required'),
   reference: z.string().min(1, 'Reference is required'),
   quantity: z.coerce.number().int().positive('Quantity must be a whole number'),
-  discountPercentage: z.coerce.number().min(0).max(100)
+  discountPercentage: z.coerce.number()
 });
 
 type QuoteFormValues = z.infer<typeof quoteSchema>;
@@ -69,6 +69,12 @@ type ExistingQuote = {
 
 type LineRow = PreviewLine & { code: string };
 
+type LineOverride = {
+  description?: string;
+  unitPricePerThousand?: number;
+  makeReadyFixed?: number;
+};
+
 type QuoteBuilderProps = {
   rateCards: RateCard[];
   existingQuote?: ExistingQuote;
@@ -88,6 +94,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
     existingQuote ? existingQuote.lines.filter(line => line.rateCardId !== 'custom').map((line) => line.rateCardId) : []
   );
   const [lineQuantities, setLineQuantities] = useState<Record<string, number>>({});
+  const [lineOverrides, setLineOverrides] = useState<Record<string, LineOverride>>({});
   const [customLines, setCustomLines] = useState<CustomLine[]>(
     existingQuote
       ? existingQuote.lines
@@ -247,7 +254,19 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         accessorKey: 'description',
         header: 'Operation',
         cell: ({ row }) => (
-          <p className="font-medium text-slate-900">{row.original.description}</p>
+          <Input
+            value={lineOverrides[row.original.rateCardId]?.description ?? row.original.description}
+            onChange={(e) => {
+              setLineOverrides((prev) => ({
+                ...prev,
+                [row.original.rateCardId]: {
+                  ...prev[row.original.rateCardId],
+                  description: e.target.value
+                }
+              }));
+            }}
+            className="font-medium text-slate-900 min-w-[200px]"
+          />
         )
       },
       {
@@ -282,12 +301,50 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       {
         accessorKey: 'unitPricePerThousand',
         header: 'Unit £/1k',
-        cell: ({ getValue }) => <span className="text-right tabular-nums">{formatGBP(Number(getValue() ?? 0))}</span>
+        cell: ({ row }) => (
+          <Input
+            type="number"
+            step="0.01"
+            value={lineOverrides[row.original.rateCardId]?.unitPricePerThousand ?? row.original.unitPricePerThousand}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!isNaN(val)) {
+                setLineOverrides((prev) => ({
+                  ...prev,
+                  [row.original.rateCardId]: {
+                    ...prev[row.original.rateCardId],
+                    unitPricePerThousand: val
+                  }
+                }));
+              }
+            }}
+            className="w-24 text-right tabular-nums"
+          />
+        )
       },
       {
         accessorKey: 'makeReadyFixed',
         header: 'Make-ready',
-        cell: ({ getValue }) => <span className="text-right tabular-nums">{formatGBP(Number(getValue() ?? 0))}</span>
+        cell: ({ row }) => (
+          <Input
+            type="number"
+            step="0.01"
+            value={lineOverrides[row.original.rateCardId]?.makeReadyFixed ?? row.original.makeReadyFixed}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!isNaN(val)) {
+                setLineOverrides((prev) => ({
+                  ...prev,
+                  [row.original.rateCardId]: {
+                    ...prev[row.original.rateCardId],
+                    makeReadyFixed: val
+                  }
+                }));
+              }
+            }}
+            className="w-24 text-right tabular-nums"
+          />
+        )
       },
       {
         accessorKey: 'lineTotalExVat',
@@ -319,7 +376,7 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         )
       }
     ],
-    [customLines, lineQuantities, form]
+    [customLines, lineQuantities, lineOverrides, form]
   );
 
   const table = useReactTable({
@@ -369,7 +426,10 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
         lines: [
           ...selectedRateCardIds.map((id) => ({
             rateCardId: id,
-            quantity: lineQuantities[id] || undefined
+            quantity: lineQuantities[id] || undefined,
+            description: lineOverrides[id]?.description,
+            unitPricePerThousand: lineOverrides[id]?.unitPricePerThousand,
+            makeReadyFixed: lineOverrides[id]?.makeReadyFixed
           })),
           ...customLines.map((line) => ({
             customDescription: line.customDescription,
@@ -659,12 +719,10 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="space-y-2">
-              <Label htmlFor="discountPercentage">Discount %</Label>
+              <Label htmlFor="discountPercentage">Rebates</Label>
               <Input
                 id="discountPercentage"
                 type="number"
-                min={0}
-                max={100}
                 step={0.01}
                 placeholder="0"
                 {...form.register('discountPercentage', { valueAsNumber: true })}

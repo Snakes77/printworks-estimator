@@ -58,6 +58,9 @@ const lineSelectionSchema = z.object({
   rateCardId: z.string().optional(),
   description: z.string().optional(),
   quantity: z.number().int().positive().optional(), // Line-specific quantity
+  // Override pricing
+  unitPricePerThousand: z.number().optional(),
+  makeReadyFixed: z.number().optional(),
   // For custom/bespoke line items
   customDescription: z.string().optional(),
   customSetupCharge: z.number().optional(),
@@ -70,7 +73,7 @@ const quotePayloadSchema = z.object({
   projectName: z.string().trim().min(1).max(200),
   reference: z.string().trim().min(1).max(100),
   quantity: z.number().int().positive().max(1_000_000),
-  discountPercentage: z.number().min(0).max(100).default(0),
+  discountPercentage: z.number().default(0), // Allow negative for rebates
   lines: z.array(lineSelectionSchema).min(1).max(100)
 });
 
@@ -275,7 +278,7 @@ export const quotesRouter = createTRPCRouter({
     });
 
     const lineCalculations = orderedCards.map((card, index) => {
-      const line = rateCardLines[index];
+      const line = rateCardLines[index]!;
       const lineQty = line.quantity ?? input.quantity; // Use line quantity or fallback to quote quantity
       const band = card.bands.find(
         (b) => lineQty >= b.fromQty && lineQty <= b.toQty
@@ -283,7 +286,27 @@ export const quotesRouter = createTRPCRouter({
       if (!band) {
         throw new Error(`No band for ${card.name} at quantity ${lineQty}`);
       }
-      return calculateLine(card, band, lineQty);
+      const calculated = calculateLine(card, band, lineQty);
+
+      // Apply overrides if provided
+      if (line.description) {
+        calculated.description = line.description;
+      }
+      if (line.unitPricePerThousand !== undefined) {
+        calculated.unitPricePerThousand = new Decimal(line.unitPricePerThousand);
+      }
+      if (line.makeReadyFixed !== undefined) {
+        calculated.makeReadyFixed = new Decimal(line.makeReadyFixed);
+      }
+
+      // Recalculate line total if pricing was overridden
+      if (line.unitPricePerThousand !== undefined || line.makeReadyFixed !== undefined) {
+        calculated.lineTotalExVat = calculated.makeReadyFixed.add(
+          calculated.unitsInThousands.mul(calculated.unitPricePerThousand)
+        );
+      }
+
+      return calculated;
     });
 
     // Add custom lines (default to PRINT category for custom items)
