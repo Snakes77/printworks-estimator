@@ -153,13 +153,16 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
     preview.mutate({
       ...values,
       lines: [
-        ...selectedRateCardIds.map((id) => ({
-          rateCardId: id,
-          quantity: lineQuantities[id] || undefined,
-          description: lineOverrides[id]?.description,
-          unitPricePerThousand: lineOverrides[id]?.unitPricePerThousand,
-          makeReadyFixed: lineOverrides[id]?.makeReadyFixed
-        })),
+        ...selectedRateCardIds.map((id) => {
+          const override = lineOverrides[id];
+          return {
+            rateCardId: id,
+            quantity: lineQuantities[id] || undefined,
+            description: override?.description || undefined,
+            unitPricePerThousand: override?.unitPricePerThousand !== undefined && !isNaN(override.unitPricePerThousand) ? override.unitPricePerThousand : undefined,
+            makeReadyFixed: override?.makeReadyFixed !== undefined && !isNaN(override.makeReadyFixed) ? override.makeReadyFixed : undefined
+          };
+        }),
         ...customLines.map((line) => ({ customDescription: line.customDescription, customPrice: line.customPrice }))
       ]
     });
@@ -431,13 +434,16 @@ export const QuoteBuilder = ({ rateCards, existingQuote }: QuoteBuilderProps) =>
       const payload = {
         ...values,
         lines: [
-          ...selectedRateCardIds.map((id) => ({
-            rateCardId: id,
-            quantity: lineQuantities[id] || undefined,
-            description: lineOverrides[id]?.description,
-            unitPricePerThousand: lineOverrides[id]?.unitPricePerThousand,
-            makeReadyFixed: lineOverrides[id]?.makeReadyFixed
-          })),
+          ...selectedRateCardIds.map((id) => {
+            const override = lineOverrides[id];
+            return {
+              rateCardId: id,
+              quantity: lineQuantities[id] || undefined,
+              description: override?.description || undefined,
+              unitPricePerThousand: override?.unitPricePerThousand !== undefined && !isNaN(override.unitPricePerThousand) ? override.unitPricePerThousand : undefined,
+              makeReadyFixed: override?.makeReadyFixed !== undefined && !isNaN(override.makeReadyFixed) ? override.makeReadyFixed : undefined
+            };
+          }),
           ...customLines.map((line) => ({
             customDescription: line.customDescription,
             customSetupCharge: line.customSetupCharge,
